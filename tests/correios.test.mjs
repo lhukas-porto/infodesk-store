@@ -240,4 +240,69 @@ await runAsyncTest('Proteção Anti-Fraude detecta adulteração de frete no che
   assert.ok(typeof validation.total === 'number')
 })
 
+// =========================================================================
+// 11. Multi-loja & Mascaramento de Segurança de Credenciais
+// =========================================================================
+import { getStoreCorreiosConfig, setStoreCorreiosConfig, maskSecret } from '../server/correios/config.js'
+import { diagnoseCorreiosConnection } from '../server/correios/correiosDiagnosis.js'
+
+runTest('Mascaramento de Credenciais: maskSecret oculta código de acesso', () => {
+  assert.equal(maskSecret('meuTokenSuperSecreto123'), '••••••••••••••••')
+  assert.equal(maskSecret(''), '')
+  assert.equal(maskSecret(null), '')
+})
+
+runTest('Configuração Multi-loja e preservação de segredo com máscara', () => {
+  // Salva config de uma loja específica
+  setStoreCorreiosConfig('filial-rj', {
+    usuario: 'user_filial_rj',
+    codigoAcesso: 'chaveSeguraRJ999',
+    contrato: '9912345678',
+    dr: '10',
+    cepOrigem: '20040002',
+    pacEnabled: true,
+    sedexEnabled: false
+  })
+
+  const rjConfig = getStoreCorreiosConfig('filial-rj')
+  assert.equal(rjConfig.usuario, 'user_filial_rj')
+  assert.equal(rjConfig.codigoAcesso, 'chaveSeguraRJ999')
+  assert.equal(rjConfig.contrato, '9912345678')
+  assert.equal(rjConfig.sedexEnabled, false)
+
+  // Atualiza enviando a máscara no lugar do segredo -> o segredo deve ser PRESERVADO
+  setStoreCorreiosConfig('filial-rj', {
+    usuario: 'user_filial_rj_editado',
+    codigoAcesso: '••••••••••••••••',
+    sedexEnabled: true
+  })
+
+  const updatedRj = getStoreCorreiosConfig('filial-rj')
+  assert.equal(updatedRj.usuario, 'user_filial_rj_editado')
+  assert.equal(updatedRj.codigoAcesso, 'chaveSeguraRJ999', 'Código de acesso original deve ser mantido intacto')
+  assert.equal(updatedRj.sedexEnabled, true)
+})
+
+// =========================================================================
+// 12. Diagnóstico dos Correios em 8 Etapas
+// =========================================================================
+await runAsyncTest('Diagnóstico reporta checklist amigável quando faltam credenciais', async () => {
+  const diag = await diagnoseCorreiosConnection({
+    usuario: '',
+    codigoAcesso: '',
+    contrato: ''
+  }, 'loja-sem-credenciais')
+
+  assert.equal(diag.success, false)
+  assert.ok(Array.isArray(diag.results))
+  assert.equal(diag.results.length, 6)
+  assert.equal(diag.results[0].item, 'Credenciais válidas')
+  assert.equal(diag.results[0].ok, false)
+  assert.equal(diag.results[1].item, 'Contrato ativo')
+  assert.equal(diag.results[2].item, 'PAC disponível')
+  assert.equal(diag.results[3].item, 'SEDEX disponível')
+  assert.equal(diag.results[4].item, 'API Preço funcionando')
+  assert.equal(diag.results[5].item, 'API Prazo funcionando')
+})
+
 console.log(`\n🎉 Todos os ${passedTests} testes foram concluídos com SUCESSO! 🚀`)

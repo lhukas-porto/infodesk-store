@@ -1,7 +1,7 @@
 // Cliente Orquestrador dos Correios
 // Realiza chamadas em paralelo (Preço + Prazo), cache de cotações, renovação de token em caso de 401 e combinação dos dados
 
-import { CORREIOS_CONFIG, CORREIOS_SERVICES, hasCorreiosCredentials } from './config.js'
+import { CORREIOS_CONFIG, CORREIOS_SERVICES, hasCorreiosCredentials, getStoreCorreiosConfig } from './config.js'
 import { getCorreiosToken, invalidateCorreiosToken } from './correiosAuth.js'
 import { fetchCorreiosPrice } from './correiosPrice.js'
 import { fetchCorreiosDeadline } from './correiosDeadline.js'
@@ -11,8 +11,8 @@ import { calculatePackage } from './packagePacker.js'
 const quoteCache = new Map() // key -> { timestamp, data }
 const QUOTE_CACHE_TTL_MS = 5 * 60 * 1000
 
-function getCacheKey(cepDestino, pkg) {
-  return `${cepDestino}_${pkg.weightG}_${pkg.length}x${pkg.width}x${pkg.height}`
+function getCacheKey(storeId, cepDestino, pkg) {
+  return `${storeId}_${cepDestino}_${pkg.weightG}_${pkg.length}x${pkg.width}x${pkg.height}`
 }
 
 function cleanExpiredCache() {
@@ -28,9 +28,10 @@ function cleanExpiredCache() {
  * Cota frete e prazo nas APIs oficiais dos Correios
  * @param {string} cepDestino - CEP do destinatário
  * @param {Array} items - Itens com dimensões e pesos
+ * @param {string} storeId - Identificador da loja/empresa
  * @returns {Promise<{ success: boolean, options: Array, package: object, error?: string }>}
  */
-export async function quoteShipping(cepDestino, items) {
+export async function quoteShipping(cepDestino, items, storeId = 'default') {
   const cleanCep = (cepDestino || '').replace(/\D/g, '')
   if (cleanCep.length !== 8) {
     return {
@@ -40,20 +41,30 @@ export async function quoteShipping(cepDestino, items) {
     }
   }
 
+  const storeCfg = getStoreCorreiosConfig(storeId)
+  if (!storeCfg.enabled) {
+    return {
+      success: false,
+      error: 'Integração dos Correios está desativada no painel administrativo.',
+      options: [],
+      disabled: true
+    }
+  }
+
   // 1. Calcula embalagem determinística
   const packageInfo = calculatePackage(items)
 
   // 2. Verifica cache em memória
   cleanExpiredCache()
-  const cacheKey = getCacheKey(cleanCep, packageInfo)
+  const cacheKey = getCacheKey(storeId, cleanCep, packageInfo)
   const cached = quoteCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < QUOTE_CACHE_TTL_MS) {
     return { ...cached.data, fromCache: true }
   }
 
   // 3. Verifica credenciais dos Correios
-  if (!hasCorreiosCredentials()) {
-    console.warn('[Correios] Credenciais oficiais não configuradas no .env. Configure CORREIOS_USUARIO, CORREIOS_CODIGO_ACESSO e CORREIOS_CONTRATO.')
+  if (!hasCorreiosCredentials(storeId)) {
+    console.warn('[Correios] Credenciais oficiais não configuradas no .env ou no Painel. Configure Usuário, Código de Acesso e Contrato.')
     return {
       success: false,
       error: 'Serviço de cotação dos Correios temporariamente indisponível. Verifique as credenciais do contrato.',
@@ -78,10 +89,14 @@ export async function quoteShipping(cepDestino, items) {
         fetchCorreiosDeadline(token, cleanCep)
       ])
 
-      // 5. Combina os resultados por código de serviço / coProduto
+      // 5. Combina os resultados por código de serviço / coProduto respeitando ativação
       const options = []
 
       for (const service of CORREIOS_SERVICES) {
+        // Verifica se o serviço está habilitado nas configurações da loja
+        if (service.id === 'PAC' && !storeCfg.pacEnabled) continue
+        if (service.id === 'SEDEX' && !storeCfg.sedexEnabled) continue
+
         const priceItem = priceResults.find(
           p => p.coProduto === service.code || p.nuRequisicao === service.requisicao
         )

@@ -30,6 +30,28 @@ function correiosApiPlugin() {
             return
           }
         }
+        if (url === '/api/shipping/config') {
+          try {
+            const { default: handler } = await import('./api/shipping/config.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/shipping/config:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
+        if (url === '/api/shipping/test-connection') {
+          try {
+            const { default: handler } = await import('./api/shipping/test-connection.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/shipping/test-connection:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
         next()
       })
     }

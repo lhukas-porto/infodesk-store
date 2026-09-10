@@ -1,30 +1,9 @@
-// Configurações e definições das APIs Oficiais dos Correios
-// Mantém as variáveis seguras exclusivamente no ambiente Node.js / Serverless
+// Configurações e definições das APIs Oficiais dos Correios (Multiempresa / Multi-Store)
+// Mantém as credenciais seguras exclusivamente no ambiente Node.js / Serverless
 
-export const CORREIOS_CONFIG = {
-  get usuario() {
-    return process.env.CORREIOS_USUARIO || ''
-  },
-  get codigoAcesso() {
-    return process.env.CORREIOS_CODIGO_ACESSO || ''
-  },
-  get contrato() {
-    return process.env.CORREIOS_CONTRATO || ''
-  },
-  get dr() {
-    return process.env.CORREIOS_DR || '10'
-  },
-  get cepOrigem() {
-    return (process.env.CORREIOS_CEP_ORIGEM || '70673631').replace(/\D/g, '')
-  },
-  authUrl: 'https://api.correios.com.br/token/v1/autentica/contrato',
-  precoUrl: 'https://api.correios.com.br/preco/v1/nacional',
-  prazoUrl: 'https://api.correios.com.br/prazo/v1/nacional',
-  timeoutMs: 8000,
-}
+// Mapa em memória de configurações por empresa/loja (store_id)
+const storeConfigs = new Map()
 
-// Catálogo de serviços habilitados no contrato comercial dos Correios
-// Para habilitar novos serviços futuramente (ex: SEDEX 10, SEDEX 12), basta adicionar uma nova entrada aqui!
 export const CORREIOS_SERVICES = [
   {
     id: 'PAC',
@@ -40,15 +19,101 @@ export const CORREIOS_SERVICES = [
     description: 'Expresso com entrega rápida prioritária',
     requisicao: 'SEDEX'
   }
-  // Exemplo de expansão futura:
-  // { id: 'SEDEX10', code: '03158', name: 'SEDEX 10', description: 'Entrega até as 10h da manhã', requisicao: 'SEDEX10' },
-  // { id: 'SEDEX12', code: '03140', name: 'SEDEX 12', description: 'Entrega até as 12h', requisicao: 'SEDEX12' }
 ]
 
-export function hasCorreiosCredentials() {
+export function maskSecret(secret) {
+  if (!secret || typeof secret !== 'string') return ''
+  return '••••••••••••••••'
+}
+
+/**
+ * Retorna as configurações ativas para a empresa/loja especificada
+ * Prioridade: Configuração dinâmica salva > Variáveis de ambiente
+ * @param {string} storeId
+ * @returns {object}
+ */
+export function getStoreCorreiosConfig(storeId = 'default') {
+  const custom = storeConfigs.get(storeId) || {}
+
+  return {
+    storeId,
+    enabled: custom.enabled !== undefined ? Boolean(custom.enabled) : true,
+    usuario: custom.usuario || process.env.CORREIOS_USUARIO || '',
+    codigoAcesso: custom.codigoAcesso || process.env.CORREIOS_CODIGO_ACESSO || '',
+    contrato: custom.contrato || process.env.CORREIOS_CONTRATO || '',
+    dr: custom.dr || process.env.CORREIOS_DR || '10',
+    cepOrigem: (custom.cepOrigem || process.env.CORREIOS_CEP_ORIGEM || '70673631').replace(/\D/g, ''),
+    pacEnabled: custom.pacEnabled !== undefined ? Boolean(custom.pacEnabled) : true,
+    sedexEnabled: custom.sedexEnabled !== undefined ? Boolean(custom.sedexEnabled) : true,
+    authUrl: 'https://api.correios.com.br/token/v1/autentica/contrato',
+    precoUrl: 'https://api.correios.com.br/preco/v1/nacional',
+    prazoUrl: 'https://api.correios.com.br/prazo/v1/nacional',
+    timeoutMs: 8000,
+  }
+}
+
+/**
+ * Atualiza as configurações de uma empresa/loja específica em memória
+ * @param {string} storeId
+ * @param {object} updates
+ */
+export function setStoreCorreiosConfig(storeId = 'default', updates = {}) {
+  const current = getStoreCorreiosConfig(storeId)
+
+  // Se o código de acesso recebido for a máscara ou vazio, preserva o existente
+  let finalCodigoAcesso = current.codigoAcesso
+  if (updates.codigoAcesso && updates.codigoAcesso !== '••••••••••••••••' && !updates.codigoAcesso.startsWith('••')) {
+    finalCodigoAcesso = updates.codigoAcesso
+  }
+
+  const merged = {
+    ...current,
+    ...updates,
+    codigoAcesso: finalCodigoAcesso,
+    cepOrigem: updates.cepOrigem ? String(updates.cepOrigem).replace(/\D/g, '') : current.cepOrigem
+  }
+
+  storeConfigs.set(storeId, merged)
+  return merged
+}
+
+export const CORREIOS_CONFIG = {
+  get usuario() {
+    return getStoreCorreiosConfig('default').usuario
+  },
+  get codigoAcesso() {
+    return getStoreCorreiosConfig('default').codigoAcesso
+  },
+  get contrato() {
+    return getStoreCorreiosConfig('default').contrato
+  },
+  get dr() {
+    return getStoreCorreiosConfig('default').dr
+  },
+  get cepOrigem() {
+    return getStoreCorreiosConfig('default').cepOrigem
+  },
+  get enabled() {
+    return getStoreCorreiosConfig('default').enabled
+  },
+  get pacEnabled() {
+    return getStoreCorreiosConfig('default').pacEnabled
+  },
+  get sedexEnabled() {
+    return getStoreCorreiosConfig('default').sedexEnabled
+  },
+  authUrl: 'https://api.correios.com.br/token/v1/autentica/contrato',
+  precoUrl: 'https://api.correios.com.br/preco/v1/nacional',
+  prazoUrl: 'https://api.correios.com.br/prazo/v1/nacional',
+  timeoutMs: 8000,
+}
+
+export function hasCorreiosCredentials(storeId = 'default') {
+  const cfg = getStoreCorreiosConfig(storeId)
   return Boolean(
-    CORREIOS_CONFIG.usuario &&
-    CORREIOS_CONFIG.codigoAcesso &&
-    CORREIOS_CONFIG.contrato
+    cfg.enabled &&
+    cfg.usuario &&
+    cfg.codigoAcesso &&
+    cfg.contrato
   )
 }

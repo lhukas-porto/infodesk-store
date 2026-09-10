@@ -3,7 +3,7 @@ import {
   X, Package, DollarSign, ShoppingCart, BarChart3, Plus,
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
   Shield, KeyRound, User, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
-  Layers, Sliders, Eye, RefreshCw, Printer, Sparkles
+  Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { generateValidEan13 } from '../services/barcodeService'
@@ -12,6 +12,7 @@ import {
   calcCommercialSellPrice,
   calcCommercialOriginalPrice
 } from '../services/pricingService'
+import { formatCep } from '../services/correiosService'
 
 export default function AdminDashboard() {
   const {
@@ -58,6 +59,104 @@ export default function AdminDashboard() {
   const [passForm, setPassForm] = useState({ current: '', newPass: '', confirm: '' })
   const [passError, setPassError] = useState('')
   const [passSuccess, setPassSuccess] = useState('')
+
+  // Correios Multiempresa Settings State
+  const [correiosForm, setCorreiosForm] = useState({
+    storeId: 'default',
+    enabled: true,
+    usuario: '',
+    codigoAcesso: '',
+    contrato: '',
+    dr: '10',
+    cepOrigem: '70673-631',
+    pacEnabled: true,
+    sedexEnabled: true,
+    hasCodigoAcesso: false,
+  })
+  const [showCodigoAcesso, setShowCodigoAcesso] = useState(false)
+  const [isSavingCorreios, setIsSavingCorreios] = useState(false)
+  const [isTestingCorreios, setIsTestingCorreios] = useState(false)
+  const [testResults, setTestResults] = useState(null)
+
+  // Carrega configurações dos Correios ao abrir a aba
+  useEffect(() => {
+    if (tab === 'shipping') {
+      fetch(`/api/shipping/config?storeId=${correiosForm.storeId || 'default'}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            setCorreiosForm(prev => ({
+              ...prev,
+              enabled: data.enabled !== undefined ? data.enabled : true,
+              usuario: data.usuario || '',
+              codigoAcesso: data.maskedCodigoAcesso || '',
+              contrato: data.contrato || '',
+              dr: data.dr || '10',
+              cepOrigem: data.cepOrigem ? formatCep(data.cepOrigem) : '70673-631',
+              pacEnabled: data.pacEnabled !== undefined ? data.pacEnabled : true,
+              sedexEnabled: data.sedexEnabled !== undefined ? data.sedexEnabled : true,
+              hasCodigoAcesso: data.hasCodigoAcesso
+            }))
+          }
+        })
+        .catch(err => console.warn('Erro ao carregar configurações dos Correios:', err))
+    }
+  }, [tab, correiosForm.storeId])
+
+  const handleSaveCorreios = async (e) => {
+    e?.preventDefault()
+    setIsSavingCorreios(true)
+    try {
+      const res = await fetch('/api/shipping/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(correiosForm)
+      })
+      const data = await res.json()
+      if (data.success) {
+        showToast('Configurações dos Correios salvas com sucesso! 🚚✅')
+        setCorreiosForm(prev => ({
+          ...prev,
+          codigoAcesso: data.maskedCodigoAcesso || prev.codigoAcesso,
+          hasCodigoAcesso: data.hasCodigoAcesso
+        }))
+      } else {
+        showToast(data.error || 'Erro ao salvar configurações.', 'error')
+      }
+    } catch {
+      showToast('Erro de conexão ao salvar configurações.', 'error')
+    } finally {
+      setIsSavingCorreios(false)
+    }
+  }
+
+  const handleTestCorreios = async () => {
+    setIsTestingCorreios(true)
+    setTestResults(null)
+    try {
+      const res = await fetch('/api/shipping/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(correiosForm)
+      })
+      const data = await res.json()
+      setTestResults(data)
+      if (data.success) {
+        showToast('Conexão com os Correios validada com sucesso! 🎉')
+      } else {
+        showToast(data.message || 'Falha no teste de conexão com os Correios.', 'error')
+      }
+    } catch {
+      setTestResults({
+        success: false,
+        message: 'Erro ao conectar no endpoint de teste dos Correios.',
+        results: []
+      })
+      showToast('Não foi possível realizar o teste no momento.', 'error')
+    } finally {
+      setIsTestingCorreios(false)
+    }
+  }
 
   if (!showAdminDashboard) return null
 
@@ -340,6 +439,7 @@ export default function AdminDashboard() {
             { id: 'products', icon: <Package size={16} />, label: `Produtos (${products.length})` },
             { id: 'orders', icon: <ShoppingCart size={16} />, label: `Pedidos (${orders.length})` },
             { id: 'add', icon: <Plus size={16} />, label: 'Cadastrar Produto' },
+            { id: 'shipping', icon: <Truck size={16} />, label: 'Frete & Entregas' },
             { id: 'security', icon: <KeyRound size={16} />, label: 'Segurança & Senha' },
           ].map(t => (
             <button key={t.id} className={`adm-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
@@ -940,6 +1040,232 @@ export default function AdminDashboard() {
                 >
                   <Plus size={18} /> Cadastrar Produto no Catálogo
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Shipping & Delivery Tab (Correios Multiempresa) */}
+          {tab === 'shipping' && (
+            <div className="adm-shipping-tab">
+              <div className="adm-sec-card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <div className="adm-sec-header">
+                  <Truck size={26} className="adm-sec-icon" style={{ color: '#0284c7', background: '#e0f2fe' }} />
+                  <div>
+                    <h3>Configurações de Frete & Entregas — Correios</h3>
+                    <p>Gerencie o contrato comercial dos Correios, credenciais de API e modalidades ativas para sua loja.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveCorreios} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+                  {/* Status Geral */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--dark-50)', borderRadius: '10px', border: '1px solid var(--dark-200)' }}>
+                    <div>
+                      <strong style={{ display: 'block', fontSize: 'var(--text-md)' }}>Integração Oficial dos Correios</strong>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
+                        Quando ativada, o cálculo de frete no carrinho e checkout consultará seu contrato dos Correios em tempo real.
+                      </span>
+                    </div>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={correiosForm.enabled}
+                        onChange={e => setCorreiosForm({ ...correiosForm, enabled: e.target.checked })}
+                        style={{ width: '18px', height: '18px', accentColor: '#16a34a' }}
+                      />
+                      <span>{correiosForm.enabled ? 'Ativada' : 'Desativada'}</span>
+                    </label>
+                  </div>
+
+                  {/* Multiempresa / Loja */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+                    <div className="ck-field">
+                      <label>Identificador da Loja / Empresa (Store ID):</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={correiosForm.storeId}
+                        onChange={e => setCorreiosForm({ ...correiosForm, storeId: e.target.value })}
+                        placeholder="default"
+                      />
+                      <small style={{ color: 'var(--dark-400)', fontSize: '11px' }}>Permite configurações de frete isoladas por empresa/filial</small>
+                    </div>
+
+                    <div className="ck-field">
+                      <label>CEP de Origem das Encomendas:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={correiosForm.cepOrigem}
+                        onChange={e => setCorreiosForm({ ...correiosForm, cepOrigem: formatCep(e.target.value) })}
+                        placeholder="70673-631"
+                        maxLength={9}
+                      />
+                      <small style={{ color: 'var(--dark-400)', fontSize: '11px' }}>CEP de onde saem as mercadorias</small>
+                    </div>
+                  </div>
+
+                  {/* Credenciais Oficiais */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+                    <div className="ck-field">
+                      <label>Usuário / ID Correios:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={correiosForm.usuario}
+                        onChange={e => setCorreiosForm({ ...correiosForm, usuario: e.target.value })}
+                        placeholder="Ex: seu-usuario ou CNPJ"
+                      />
+                    </div>
+
+                    <div className="ck-field">
+                      <label>Código de Acesso às APIs (Token/Senha):</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showCodigoAcesso ? 'text' : 'password'}
+                          className="input-field"
+                          value={correiosForm.codigoAcesso}
+                          onChange={e => setCorreiosForm({ ...correiosForm, codigoAcesso: e.target.value })}
+                          placeholder={correiosForm.hasCodigoAcesso ? '••••••••••••••••' : 'Insira o código de acesso'}
+                          style={{ paddingRight: '40px' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCodigoAcesso(!showCodigoAcesso)}
+                          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dark-500)' }}
+                          title={showCodigoAcesso ? 'Ocultar' : 'Exibir'}
+                        >
+                          {showCodigoAcesso ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <small style={{ color: 'var(--dark-400)', fontSize: '11px' }}>
+                        {correiosForm.hasCodigoAcesso ? '🔒 Chave salva e protegida com máscara no backend' : 'Chave gerada no portal Meu Correios'}
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* Contrato e DR */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)' }}>
+                    <div className="ck-field">
+                      <label>Número do Contrato:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={correiosForm.contrato}
+                        onChange={e => setCorreiosForm({ ...correiosForm, contrato: e.target.value })}
+                        placeholder="Ex: 9912345678"
+                      />
+                    </div>
+
+                    <div className="ck-field">
+                      <label>DR / Superintendência Estadual:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={correiosForm.dr}
+                        onChange={e => setCorreiosForm({ ...correiosForm, dr: e.target.value })}
+                        placeholder="Ex: 10 (DF)"
+                      />
+                      <small style={{ color: 'var(--dark-400)', fontSize: '11px' }}>Ex: 10 para DF, 04 para SP, etc.</small>
+                    </div>
+                  </div>
+
+                  {/* Modalidades de Entrega */}
+                  <div style={{ padding: '16px', background: 'var(--dark-50)', borderRadius: '10px', border: '1px solid var(--dark-200)' }}>
+                    <label style={{ display: 'block', marginBottom: '10px', fontWeight: 600 }}>Modalidades Habilitadas na Loja:</label>
+                    <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={correiosForm.pacEnabled}
+                          onChange={e => setCorreiosForm({ ...correiosForm, pacEnabled: e.target.checked })}
+                          style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
+                        />
+                        <span><strong>PAC</strong> (coProduto 03298 — Encomenda Econômica)</span>
+                      </label>
+
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={correiosForm.sedexEnabled}
+                          onChange={e => setCorreiosForm({ ...correiosForm, sedexEnabled: e.target.checked })}
+                          style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
+                        />
+                        <span><strong>SEDEX</strong> (coProduto 03220 — Encomenda Expressa)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Ações */}
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={isSavingCorreios}
+                    >
+                      {isSavingCorreios ? 'Salvando...' : 'Salvar Configurações'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={handleTestCorreios}
+                      disabled={isTestingCorreios}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', borderColor: '#0284c7', color: '#0284c7' }}
+                    >
+                      {isTestingCorreios ? (
+                        <><Loader2 size={16} className="spinner" style={{ animation: 'spin 1s linear infinite' }} /> Testando Conexão...</>
+                      ) : (
+                        <><RefreshCw size={16} /> Testar Conexão</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Painel de Resultados do Teste */}
+                  {testResults && (
+                    <div style={{ marginTop: 'var(--space-4)', padding: '20px', borderRadius: '10px', background: testResults.success ? '#f0fdf4' : '#fff7ed', border: `1px solid ${testResults.success ? '#bbf7d0' : '#fed7aa'}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                        {testResults.success ? (
+                          <CheckCircle2 size={24} style={{ color: '#16a34a' }} />
+                        ) : (
+                          <AlertCircle size={24} style={{ color: '#ea580c' }} />
+                        )}
+                        <div>
+                          <strong style={{ fontSize: '1rem', color: testResults.success ? '#166534' : '#9a3412', display: 'block' }}>
+                            {testResults.success ? 'Diagnóstico Concluído com Sucesso' : 'Diagnóstico dos Correios'}
+                          </strong>
+                          <span style={{ fontSize: '12px', color: testResults.success ? '#15803d' : '#c2410c' }}>
+                            {testResults.message} {testResults.drIdentificada && `(DR Confirmada: ${testResults.drIdentificada})`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+                        {testResults.results?.map((res, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '8px',
+                              padding: '10px 12px',
+                              background: '#fff',
+                              borderRadius: '6px',
+                              border: `1px solid ${res.ok ? '#dcfce7' : '#fee2e2'}`
+                            }}
+                          >
+                            <span style={{ color: res.ok ? '#16a34a' : '#ef4444', fontWeight: 'bold', fontSize: '16px' }}>
+                              {res.ok ? '✓' : '✗'}
+                            </span>
+                            <div>
+                              <strong style={{ fontSize: '12px', color: 'var(--dark-800)', display: 'block' }}>{res.item}</strong>
+                              <span style={{ fontSize: '11px', color: 'var(--dark-500)' }}>{res.message}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </form>
               </div>
             </div>
           )}
