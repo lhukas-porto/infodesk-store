@@ -63,6 +63,25 @@ export async function consultarCep(cep) {
   }
 }
 
+// Estima peso unitário do produto com base no cadastro ou categoria/nome
+export function getProductWeight(product) {
+  if (!product) return 0.5
+  if (product.weight && parseFloat(product.weight) > 0) return parseFloat(product.weight)
+  const cat = (product.category || '').toLowerCase()
+  const name = (product.name || '').toLowerCase()
+
+  if (name.includes('cadeira') || cat.includes('cadeira')) return 14.0
+  if (name.includes('monitor') || cat.includes('monitor')) return 4.5
+  if (name.includes('gabinete') || name.includes('computador') || name.includes('pc gamer')) return 7.5
+  if (name.includes('notebook')) return 2.2
+  if (name.includes('placa de vídeo') || name.includes('rtx') || name.includes('rx')) return 1.6
+  if (name.includes('teclado')) return 0.9
+  if (name.includes('parafusadeira') || name.includes('furadeira')) return 2.0
+  if (name.includes('cafeteira')) return 2.4
+  if (name.includes('headset') || name.includes('fone')) return 0.6
+  return 0.5 // periféricos pequenos, mouses, cabos, ssds
+}
+
 export function calcularFrete(cep, pesoKg = 0.5, valorTotal = 0) {
   const cepLimpo = cep.replace(/\D/g, '')
   if (cepLimpo.length !== 8) {
@@ -71,7 +90,8 @@ export function calcularFrete(cep, pesoKg = 0.5, valorTotal = 0) {
 
   const regiao = getRegiaoPorCep(cepLimpo)
   const tabela = FRETE_TABELA[regiao] || FRETE_TABELA['SP_RJ_MG_ES']
-  const pesoExtra = Math.max(0, pesoKg - 1)
+  const pesoFinal = Math.max(0.3, Math.round(pesoKg * 10) / 10)
+  const pesoExtra = Math.max(0, pesoFinal - 1)
   const adicional = pesoExtra * ADICIONAL_POR_KG
 
   const sedex = Math.round((tabela.sedex + adicional) * 100) / 100
@@ -80,6 +100,7 @@ export function calcularFrete(cep, pesoKg = 0.5, valorTotal = 0) {
   return {
     cep: cepLimpo,
     regiao,
+    pesoKg: pesoFinal,
     opcoes: [
       {
         tipo: 'SEDEX',

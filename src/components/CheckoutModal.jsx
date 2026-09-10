@@ -9,7 +9,8 @@ import {
   consultarCep,
   formatCep,
   formatCpf,
-  formatPhone
+  formatPhone,
+  getProductWeight
 } from '../services/correiosService'
 import { gerarBoleto, gerarBoletoPDF, gerarLinkPagamento } from '../services/itauPaymentService'
 
@@ -64,17 +65,23 @@ export default function CheckoutModal() {
   const [freteResult, setFreteResult] = useState(null)
   const [selectedFrete, setSelectedFrete] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState(null) // 'boleto' | 'link' | 'pix'
+  // Calcula o peso acumulado de todos os itens e quantidades no carrinho
+  const totalCartWeight = (cart || []).reduce((acc, item) => {
+    return acc + (getProductWeight(item) * (item.qty || 1))
+  }, 0)
+  const finalCartWeight = Math.max(0.5, Math.round(totalCartWeight * 10) / 10)
+
   // Pré-calcula opções de frete automaticamente se já tiver CEP válido preenchido
   useEffect(() => {
     const clean = (cliente.cep || '').replace(/\D/g, '')
     if (clean.length === 8 && !freteResult) {
-      const freteRes = calcularFrete(clean, 0.5, cartTotal)
+      const freteRes = calcularFrete(clean, finalCartWeight, cartTotal)
       if (!freteRes.error) {
         setFreteResult(freteRes)
         setSelectedFrete(freteRes.opcoes[0])
       }
     }
-  }, [cliente.cep, cartTotal, freteResult])
+  }, [cliente.cep, cartTotal, finalCartWeight, freteResult])
 
   if (!showCheckout) return null
 
@@ -104,8 +111,8 @@ export default function CheckoutModal() {
           message: `Endereço localizado: ${res.logradouro ? res.logradouro + ' — ' : ''}${res.bairro ? res.bairro + ', ' : ''}${res.cidade}/${res.estado}`
         })
 
-        // Auto-calcular opções de frete
-        const freteRes = calcularFrete(clean, 0.5, cartTotal)
+        // Auto-calcular opções de frete com peso acumulado real
+        const freteRes = calcularFrete(clean, finalCartWeight, cartTotal)
         if (!freteRes.error) {
           setFreteResult(freteRes)
           setSelectedFrete(freteRes.opcoes[0])
@@ -123,7 +130,7 @@ export default function CheckoutModal() {
 
   const handleManualCalcFrete = () => {
     const clean = (cliente.cep || '').replace(/\D/g, '')
-    const result = calcularFrete(clean, 0.5, cartTotal)
+    const result = calcularFrete(clean, finalCartWeight, cartTotal)
     if (!result.error) {
       setFreteResult(result)
       setSelectedFrete(result.opcoes[0])
@@ -401,7 +408,7 @@ export default function CheckoutModal() {
               <button className="btn btn-ghost ck-back" onClick={() => setStep(1)}><ArrowLeft size={16} /> Voltar</button>
               <h3>Opção de Envio (Correios)</h3>
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)', marginBottom: 'var(--space-4)' }}>
-                Destino: <strong>{cliente.cidade}/{cliente.estado}</strong> (CEP: {cliente.cep})
+                Destino: <strong>{cliente.cidade}/{cliente.estado}</strong> (CEP: {cliente.cep}) · 📦 Remessa: <strong>{finalCartWeight.toFixed(1)} kg</strong> ({cart.reduce((a, b) => a + (b.qty || 1), 0)} {cart.reduce((a, b) => a + (b.qty || 1), 0) > 1 ? 'itens' : 'item'})
               </p>
 
               {freteResult && freteResult.opcoes.map(op => (

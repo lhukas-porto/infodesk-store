@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap, MapPin } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
-import { calcularFrete, formatCep } from '../services/correiosService'
+import { calcularFrete, formatCep, getProductWeight } from '../services/correiosService'
 
 export default function ProductModal() {
   const {
@@ -19,18 +19,22 @@ export default function ProductModal() {
   const [frete, setFrete] = useState(null)
   const [showSpecs, setShowSpecs] = useState(false)
 
-  // Auto-preenche e auto-calcula o frete caso haja um CEP global definido
+  // Peso unitário e peso acumulado da quantidade selecionada
+  const unitWeight = getProductWeight(product)
+  const totalWeight = Math.max(0.3, Math.round(unitWeight * qty * 10) / 10)
+
+  // Auto-preenche e auto-calcula o frete caso haja um CEP global definido ou quantidade alterada
   useEffect(() => {
     const activeCep = globalCep || cep
     if (activeCep) {
       setCep(activeCep)
       const clean = activeCep.replace(/\D/g, '')
       if (clean.length === 8 && product) {
-        const result = calcularFrete(clean, 0.5, (product.price || 0) * qty)
+        const result = calcularFrete(clean, totalWeight, (product.price || 0) * qty)
         setFrete(result)
       }
     }
-  }, [product, globalCep, qty])
+  }, [product, globalCep, qty, totalWeight])
 
   if (!product) return null
 
@@ -41,7 +45,7 @@ export default function ProductModal() {
   const handleCalcFrete = (cepVal = cep) => {
     const clean = cepVal.replace(/\D/g, '')
     if (clean.length === 8) {
-      const result = calcularFrete(clean, 0.5, product.price * qty)
+      const result = calcularFrete(clean, totalWeight, product.price * qty)
       setFrete(result)
     }
   }
@@ -161,6 +165,11 @@ export default function ProductModal() {
                 ) : (
                   <span className="pm-frete-dest-hint">Calcule para sua região</span>
                 )}
+              </div>
+
+              <div className="pm-frete-package-tag">
+                <Package size={13} style={{ color: '#0284c7' }} />
+                <span>Pacote estimado: <strong>{totalWeight.toFixed(1)} kg</strong> ({qty} {qty > 1 ? 'unidades' : 'unidade'})</span>
               </div>
 
               <div className="pm-frete-input">
@@ -305,6 +314,21 @@ export default function ProductModal() {
             border: 1px solid #86efac;
           }
           .pm-frete-dest-hint { font-size: 11px; color: var(--dark-400); }
+          .pm-frete-package-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--dark-600);
+            background: rgba(2, 132, 199, 0.08);
+            border: 1px solid rgba(2, 132, 199, 0.2);
+            padding: 4px 10px;
+            border-radius: 6px;
+            margin-bottom: var(--space-3);
+          }
+          .pm-frete-package-tag strong {
+            color: #0284c7;
+          }
           .pm-frete-input { display: flex; gap: var(--space-2); }
           .pm-frete-input .input-field { max-width: 160px; }
           .pm-frete-results { margin-top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
