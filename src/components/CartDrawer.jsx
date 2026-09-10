@@ -76,6 +76,9 @@ export default function CartDrawer() {
                 <span>Total</span>
                 <span>R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
               </div>
+              <div className="cart-pix-discount">
+                ⚡ No Pix: <strong>R$ {(cartTotal * 0.97).toFixed(2).replace('.', ',')}</strong> (3% OFF à vista)
+              </div>
             </div>
             <button
               className="btn btn-primary btn-lg cart-checkout-btn"

@@ -122,7 +122,8 @@ export default function CheckoutModal() {
 
   const fretePrice = selectedFrete?.preco || 0
   const total = cartTotal + fretePrice
-  const pixTotal = total
+  const pixDiscount = total * 0.03
+  const pixTotal = total - pixDiscount
 
   const handleFinalize = () => {
     const fullAddress = [
@@ -134,12 +135,16 @@ export default function CheckoutModal() {
       `CEP: ${cliente.cep}`
     ].filter(Boolean).join(', ')
 
+    const finalTotal = paymentMethod === 'pix' ? pixTotal : total
+    const appliedPixDiscount = paymentMethod === 'pix' ? pixDiscount : 0
+
     const pedido = {
       items: cart,
       subtotal: cartTotal,
       frete: fretePrice,
       freteType: selectedFrete?.tipo,
-      total,
+      pixDiscount: appliedPixDiscount,
+      total: finalTotal,
       cliente: {
         ...cliente,
         enderecoCompleto: fullAddress
@@ -148,10 +153,10 @@ export default function CheckoutModal() {
     }
 
     if (paymentMethod === 'boleto') {
-      const boleto = gerarBoleto({ id: 'ORD-' + Date.now(), total, cliente })
+      const boleto = gerarBoleto({ id: 'ORD-' + Date.now(), total: finalTotal, cliente })
       pedido.boleto = boleto
     } else if (paymentMethod === 'link') {
-      const link = gerarLinkPagamento({ total })
+      const link = gerarLinkPagamento({ total: finalTotal })
       pedido.linkPagamento = link
     }
 
@@ -439,8 +444,10 @@ export default function CheckoutModal() {
                 <div className={`ck-payment-card ${paymentMethod === 'pix' ? 'selected' : ''}`} onClick={() => setPaymentMethod('pix')}>
                   <QrCode size={28} />
                   <strong>Pix Instantâneo</strong>
-                  <span>Chave QR Code & Copia e Cola</span>
-                  <span className="ck-payment-price">R$ {total.toFixed(2).replace('.', ',')}</span>
+                  <span style={{ color: '#16a34a', fontWeight: 600 }}>Chave QR Code (3% OFF à vista)</span>
+                  <span className="ck-payment-price" style={{ color: '#16a34a', fontWeight: 800 }}>
+                    R$ {pixTotal.toFixed(2).replace('.', ',')}
+                  </span>
                 </div>
                 <div className={`ck-payment-card ${paymentMethod === 'link' ? 'selected' : ''}`} onClick={() => setPaymentMethod('link')}>
                   <CreditCard size={28} />
@@ -450,7 +457,7 @@ export default function CheckoutModal() {
                 </div>
               </div>
               <button className="btn btn-primary btn-lg ck-next" onClick={handleFinalize} disabled={!paymentMethod}>
-                Finalizar Pedido — R$ {total.toFixed(2).replace('.', ',')}
+                Finalizar Pedido — R$ {(paymentMethod === 'pix' ? pixTotal : total).toFixed(2).replace('.', ',')}
               </button>
             </div>
           )}
@@ -482,10 +489,10 @@ export default function CheckoutModal() {
               {orderResult.paymentMethod === 'pix' && (
                 <div className="ck-pix-info">
                   <h4>Pix Copia e Cola</h4>
-                  <p>Valor: <strong>R$ {total.toFixed(2).replace('.', ',')}</strong></p>
+                  <p>Valor com 3% de desconto: <strong style={{ color: '#16a34a' }}>R$ {(orderResult.total || pixTotal).toFixed(2).replace('.', ',')}</strong></p>
                   <div className="ck-pix-code">
-                    <code>00020126580014br.gov.bcb.pix0136infodesk-store-{orderResult.id}52040000530398654{total.toFixed(2)}5802BR</code>
-                    <button className="btn btn-ghost btn-sm" onClick={() => handleCopy(`00020126580014br.gov.bcb.pix0136infodesk-store-${orderResult.id}52040000530398654${total.toFixed(2)}5802BR`)}>
+                    <code>00020126580014br.gov.bcb.pix0136infodesk-store-{orderResult.id}52040000530398654{(orderResult.total || pixTotal).toFixed(2)}5802BR</code>
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleCopy(`00020126580014br.gov.bcb.pix0136infodesk-store-${orderResult.id}52040000530398654${(orderResult.total || pixTotal).toFixed(2)}5802BR`)}>
                       <Copy size={14} /> Copiar Código
                     </button>
                   </div>

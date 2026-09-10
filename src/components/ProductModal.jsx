@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package } from 'lucide-react'
+import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { calcularFrete, formatCep } from '../services/correiosService'
 
@@ -85,13 +85,18 @@ export default function ProductModal() {
             {/* Price */}
             <div className="pm-pricing">
               {(parseFloat(product.originalPrice) || 0) > (parseFloat(product.price) || 0) && (
-                <span className="price-old">R$ {(parseFloat(product.originalPrice) || 0).toFixed(2).replace('.', ',')}</span>
+                <span className="price-old">De R$ {(parseFloat(product.originalPrice) || 0).toFixed(2).replace('.', ',')}</span>
               )}
-              <span className="price-current" style={{ fontSize: '2rem' }}>
-                R$ {(parseFloat(product.price) || 0).toFixed(2).replace('.', ',')}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="price-current" style={{ fontSize: '2.2rem', color: '#15803d', fontWeight: 800 }}>
+                  R$ {((parseFloat(product.price) || 0) * 0.97).toFixed(2).replace('.', ',')}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 800, background: '#dcfce7', color: '#166534', padding: '3px 8px', borderRadius: '4px' }}>
+                  <Zap size={12} /> 3% NO PIX À VISTA
+                </span>
+              </div>
               <span className="price-installment">
-                ou {parseInt(product.installments) || 10}x de R$ {(parseFloat(product.installmentPrice) || ((parseFloat(product.price) || 0) / (parseInt(product.installments) || 10))).toFixed(2).replace('.', ',')} sem juros
+                ou <strong>R$ {(parseFloat(product.price) || 0).toFixed(2).replace('.', ',')}</strong> em até {parseInt(product.installments) || 10}x de R$ {(parseFloat(product.installmentPrice) || ((parseFloat(product.price) || 0) / (parseInt(product.installments) || 10))).toFixed(2).replace('.', ',')} sem juros no cartão
               </span>
             </div>
 

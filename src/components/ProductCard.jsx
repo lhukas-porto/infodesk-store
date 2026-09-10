@@ -12,8 +12,8 @@ export default function ProductCard({ product }) {
   const installments = parseInt(product.installments) || 10
   const installmentPrice = parseFloat(product.installmentPrice) || (price > 0 ? price / installments : 0)
 
-  // 10% de desconto real à vista no Pix (KaBuM! / Magalu pattern)
-  const pixPrice = price * 0.90
+  // 3% de desconto real à vista no Pix (KaBuM! / Magalu pattern)
+  const pixPrice = price * 0.97
 
   const discount = (originalPrice > price && originalPrice > 0)
     ? Math.round(((originalPrice - price) / originalPrice) * 100)
@@ -95,7 +95,7 @@ export default function ProductCard({ product }) {
           <div className="price-pix-row">
             <span className="price-pix-val">R$ {pixPrice.toFixed(2).replace('.', ',')}</span>
             <span className="badge-pix-discount">
-              <Zap size={11} /> 10% NO PIX
+              <Zap size={11} /> 3% NO PIX
             </span>
           </div>
 

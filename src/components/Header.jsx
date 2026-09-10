@@ -21,7 +21,7 @@ export default function Header() {
           <div className="topbar-items">
             <span className="topbar-item highlight">
               <Zap size={13} className="topbar-icon" />
-              <strong>10% OFF</strong> no Pix à vista
+              <strong>3% OFF</strong> no Pix à vista
             </span>
             <span className="topbar-sep hide-mobile">•</span>
             <span className="topbar-item hide-mobile">
