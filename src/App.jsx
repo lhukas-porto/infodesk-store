@@ -40,7 +40,7 @@ export default function App() {
                 Tudo o que você precisa com a <span className="hero-highlight">qualidade e agilidade</span> que você merece
               </h1>
               <p className="hero-subtitle">
-                Eletrônicos, tecnologia, escritório, utilidades, ferramentas e variedades. Se você precisa, a Infodesk tem — com frete rápido dos Correios e pagamento facilitado pelo Itaú.
+                Eletrônicos, tecnologia, escritório, utilidades, ferramentas e variedades. Se você precisa, a Infodesk tem — com frete rápido dos Correios e pagamento facilitado no Pix, Cartão ou Boleto.
               </p>
               <div className="hero-cta">
                 <a href="#products" className="btn btn-primary btn-lg">

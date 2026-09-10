@@ -11,7 +11,7 @@ import {
   formatPhone,
   consultarCep
 } from '../services/correiosService'
-import { gerarBoletoPDF } from '../services/itauPaymentService'
+import { gerarBoletoPDF } from '../services/paymentService'
 
 export default function CustomerAccountModal() {
   const {

@@ -12,7 +12,7 @@ import {
   formatPhone,
   getProductWeight
 } from '../services/correiosService'
-import { gerarBoleto, gerarBoletoPDF, gerarLinkPagamento } from '../services/itauPaymentService'
+import { gerarBoleto, gerarBoletoPDF, gerarLinkPagamento } from '../services/paymentService'
 
 export default function CheckoutModal() {
   const {
@@ -454,7 +454,7 @@ export default function CheckoutModal() {
               <div className="ck-payment-options">
                 <div className={`ck-payment-card ${paymentMethod === 'boleto' ? 'selected' : ''}`} onClick={() => setPaymentMethod('boleto')}>
                   <FileText size={28} />
-                  <strong>Boleto Bancário Itaú</strong>
+                  <strong>Boleto Bancário</strong>
                   <span>Vencimento em 3 dias úteis</span>
                   <span className="ck-payment-price">R$ {total.toFixed(2).replace('.', ',')}</span>
                 </div>
@@ -488,7 +488,7 @@ export default function CheckoutModal() {
 
               {orderResult.boleto && (
                 <div className="ck-boleto-info">
-                  <h4>Boleto Bancário Itaú</h4>
+                  <h4>Boleto Bancário</h4>
                   <p>Valor: <strong>{orderResult.boleto.valorFormatado}</strong></p>
                   <p>Vencimento: <strong>{orderResult.boleto.vencimento}</strong></p>
                   <div className="ck-linha-digitavel">
@@ -518,7 +518,7 @@ export default function CheckoutModal() {
 
               {orderResult.linkPagamento && (
                 <div className="ck-link-info">
-                  <h4>Link Seguro de Pagamento Itaú</h4>
+                  <h4>Link Seguro de Pagamento</h4>
                   <p>Valor: <strong>{orderResult.linkPagamento.valorFormatado}</strong></p>
                   <a href={orderResult.linkPagamento.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
                     <CreditCard size={16} /> Pagar com Cartão

@@ -73,7 +73,7 @@ export default function Footer() {
               <CreditCard size={28} />
               <div>
                 <strong>Até 12x no cartão</strong>
-                <span>Ou Boleto Itaú</span>
+                <span>Ou Boleto Bancário</span>
               </div>
             </div>
             <div className="footer-trust-item">
@@ -185,7 +185,7 @@ export default function Footer() {
             <div className="footer-payments">
               <span className="badge badge-dark">Visa</span>
               <span className="badge badge-dark">Mastercard</span>
-              <span className="badge badge-dark">Boleto Itaú</span>
+              <span className="badge badge-dark">Boleto Bancário</span>
               <span className="badge badge-dark">Pix</span>
               {/* Acesso Restrito Discreto ao Painel Administrativo */}
               <button
