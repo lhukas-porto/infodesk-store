@@ -5,8 +5,8 @@ export default function TrustBar() {
   const benefits = [
     {
       icon: <ShieldCheck size={26} className="trust-icon" />,
-      title: 'Garantia com Nota Fiscal',
-      subtitle: 'Produtos 100% originais e garantia de fábrica'
+      title: 'Procedência & Nota Fiscal',
+      subtitle: 'Garantia oficial e nota fiscal em todos os pedidos'
     },
     {
       icon: <Truck size={26} className="trust-icon" />,
@@ -20,8 +20,8 @@ export default function TrustBar() {
     },
     {
       icon: <RotateCcw size={26} className="trust-icon" />,
-      title: 'Troca Fácil & Segura',
-      subtitle: '7 dias para devolução sem burocracia'
+      title: 'Tudo em um Só Lugar',
+      subtitle: 'Variedade completa para qualquer necessidade'
     }
   ]
 

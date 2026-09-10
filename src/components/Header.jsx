@@ -57,7 +57,7 @@ export default function Header() {
           <input
             type="text"
             className="header-search-input"
-            placeholder="Buscar produtos, marcas, categorias..."
+            placeholder="O que você procura hoje? Busque por produto, marca ou departamento..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -122,7 +122,7 @@ export default function Header() {
             <input
               type="text"
               className="header-search-input"
-              placeholder="Buscar produtos..."
+              placeholder="O que você procura hoje?..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />

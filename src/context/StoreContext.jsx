@@ -611,7 +611,14 @@ export function StoreProvider({ children }) {
       p.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.category.toLowerCase().includes(searchQuery.toLowerCase())
 
-    const matchesCategory = activeCategory === 'Todos' || p.category === activeCategory
+    const matchesCategory = activeCategory === 'Todos' ||
+      p.category === activeCategory ||
+      (activeCategory === 'Eletrônicos & Tecnologia' && ['Eletrônicos', 'Eletrônicos & Tecnologia', 'Hardware', 'Monitores', 'Notebooks'].includes(p.category)) ||
+      (activeCategory === 'Informática & Periféricos' && ['Periféricos', 'Informática & Periféricos', 'Hardware', 'Redes', 'Notebooks'].includes(p.category)) ||
+      (activeCategory === 'Escritório & Suprimentos' && ['Escritório', 'Escritório & Suprimentos', 'Suprimentos', 'Cadeiras'].includes(p.category)) ||
+      (activeCategory === 'Casa & Utilidades' && ['Casa', 'Casa & Utilidades', 'Utilidades', 'Eletro'].includes(p.category)) ||
+      (activeCategory === 'Ferramentas & Acessórios' && ['Ferramentas', 'Ferramentas & Acessórios', 'Acessórios'].includes(p.category))
+
     const inStock = p.stock > 0
 
     return matchesSearch && matchesCategory && inStock

@@ -32,17 +32,17 @@ export default function App() {
           <div className="container">
             <div className="hero-content">
               <div className="hero-badge">
-                <Zap size={14} /> Ofertas de Tecnologia
+                <Zap size={14} /> Sua Loja Completa · Tudo em um só lugar
               </div>
               <h1 className="hero-title">
-                Informática com preços que <span className="hero-highlight">aceleram</span> seu setup
+                Tudo o que você precisa com a <span className="hero-highlight">qualidade e agilidade</span> que você merece
               </h1>
               <p className="hero-subtitle">
-                Hardware, periféricos, notebooks e acessórios com frete rápido dos Correios e pagamento facilitado pelo Itaú.
+                Eletrônicos, tecnologia, escritório, utilidades, ferramentas e variedades. Se você precisa, a Infodesk tem — com frete rápido dos Correios e pagamento facilitado pelo Itaú.
               </p>
               <div className="hero-cta">
                 <a href="#products" className="btn btn-primary btn-lg">
-                  Ver Ofertas <ArrowRight size={18} />
+                  Explorar Catálogo <ArrowRight size={18} />
                 </a>
                 <div className="hero-stat">
                   <Flame size={18} />

@@ -674,18 +674,24 @@ export default function AdminDashboard() {
                       />
                     </div>
                     <div className="ck-field">
-                      <label>Categoria *</label>
+                      <label>Categoria / Departamento *</label>
                       <select
                         className="input-field"
                         value={newProduct.category}
                         onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
                       >
+                        <option>Eletrônicos & Tecnologia</option>
+                        <option>Informática & Periféricos</option>
+                        <option>Escritório & Suprimentos</option>
+                        <option>Casa & Utilidades</option>
+                        <option>Ferramentas & Acessórios</option>
                         <option>Hardware</option>
                         <option>Periféricos</option>
                         <option>Monitores</option>
                         <option>Notebooks</option>
                         <option>Redes</option>
                         <option>Acessórios</option>
+                        <option>Outros</option>
                       </select>
                     </div>
                     <div className="ck-field">
@@ -1078,18 +1084,24 @@ export default function AdminDashboard() {
                       />
                     </div>
                     <div className="ck-field">
-                      <label>Categoria *</label>
+                      <label>Categoria / Departamento *</label>
                       <select
                         className="input-field"
                         value={editingProduct.category}
                         onChange={e => setEditingProduct({ ...editingProduct, category: e.target.value })}
                       >
+                        <option>Eletrônicos & Tecnologia</option>
+                        <option>Informática & Periféricos</option>
+                        <option>Escritório & Suprimentos</option>
+                        <option>Casa & Utilidades</option>
+                        <option>Ferramentas & Acessórios</option>
                         <option>Hardware</option>
                         <option>Periféricos</option>
                         <option>Monitores</option>
                         <option>Notebooks</option>
                         <option>Redes</option>
                         <option>Acessórios</option>
+                        <option>Outros</option>
                       </select>
                     </div>
                     <div className="ck-field">

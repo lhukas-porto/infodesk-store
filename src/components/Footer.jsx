@@ -100,7 +100,7 @@ export default function Footer() {
           <div className="footer-grid">
             <div className="footer-brand">
               <InfodeskLogo size={130} variant="light" />
-              <p>Sua loja de informática e tecnologia com os melhores preços, frete rápido dos Correios e atendimento especializado.</p>
+              <p>Tudo o que você e sua empresa precisam em um só lugar. Variedade completa, procedência garantida, frete rápido dos Correios e o melhor atendimento do Brasil.</p>
             </div>
             <div className="footer-links">
               <h4>Institucional</h4>
@@ -110,12 +110,12 @@ export default function Footer() {
               <a href="#">Trocas e Devoluções</a>
             </div>
             <div className="footer-links">
-              <h4>Categorias</h4>
-              <a href="#">Hardware</a>
-              <a href="#">Periféricos</a>
-              <a href="#">Notebooks</a>
-              <a href="#">Monitores</a>
-              <a href="#">Redes</a>
+              <h4>Departamentos</h4>
+              <a href="#products">Eletrônicos & Tecnologia</a>
+              <a href="#products">Informática & Periféricos</a>
+              <a href="#products">Escritório & Suprimentos</a>
+              <a href="#products">Casa & Utilidades</a>
+              <a href="#products">Ferramentas & Variedades</a>
             </div>
             <div className="footer-links footer-contact">
               <h4>Fale Conosco</h4>

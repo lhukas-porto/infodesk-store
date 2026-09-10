@@ -3,14 +3,14 @@ import { useStore } from '../context/StoreContext'
 import { Award, ChevronRight } from 'lucide-react'
 
 const BRANDS = [
-  { name: 'ASUS', logo: 'ASUS', badge: 'Placas & Monitores' },
-  { name: 'Logitech', logo: 'LOGITECH', badge: 'Periféricos Pro' },
-  { name: 'Kingston', logo: 'KINGSTON', badge: 'Memórias & SSDs' },
-  { name: 'AMD', logo: 'AMD', badge: 'Ryzen & Radeon' },
-  { name: 'Intel', logo: 'INTEL', badge: 'Processadores Core' },
-  { name: 'Corsair', logo: 'CORSAIR', badge: 'Fontes & Gabinetes' },
-  { name: 'Redragon', logo: 'REDRAGON', badge: 'Setup Gamer' },
-  { name: 'TP-Link', logo: 'TP-LINK', badge: 'Redes & Wi-Fi' }
+  { name: 'Samsung', logo: 'SAMSUNG', badge: 'Smartphones & Telas' },
+  { name: 'Logitech', logo: 'LOGITECH', badge: 'Periféricos & Conectividade' },
+  { name: 'Tramontina', logo: 'TRAMONTINA', badge: 'Casa & Utilidades' },
+  { name: 'ASUS', logo: 'ASUS', badge: 'Tecnologia & Hardware' },
+  { name: 'Bosch', logo: 'BOSCH', badge: 'Ferramentas & Soluções' },
+  { name: 'Philips', logo: 'PHILIPS', badge: 'Eletro & Cuidados' },
+  { name: 'Kingston', logo: 'KINGSTON', badge: 'Memórias & Armazenamento' },
+  { name: '3M', logo: '3M', badge: 'Escritório & Suprimentos' }
 ]
 
 export default function BrandCarousel() {
@@ -30,9 +30,9 @@ export default function BrandCarousel() {
         <div className="brands-header">
           <div className="brands-title-wrap">
             <Award size={20} className="brands-header-icon" />
-            <h3>Marcas Oficiais & Autorizadas</h3>
+            <h3>Grandes Marcas que Você Confia</h3>
           </div>
-          <span className="brands-sub">Produtos 100% autênticos com suporte e garantia nacional</span>
+          <span className="brands-sub">Variedade autêntica em múltiplos departamentos com garantia oficial</span>
         </div>
 
         <div className="brands-grid">
