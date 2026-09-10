@@ -1,15 +1,36 @@
-import React, { useState } from 'react'
-import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap, MapPin } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { calcularFrete, formatCep } from '../services/correiosService'
 
 export default function ProductModal() {
-  const { selectedProduct: product, setSelectedProduct, addToCart } = useStore()
+  const {
+    selectedProduct: product,
+    setSelectedProduct,
+    addToCart,
+    globalCep,
+    globalAddress,
+    setShowCepModal
+  } = useStore()
+
   const [currentImg, setCurrentImg] = useState(0)
   const [qty, setQty] = useState(1)
-  const [cep, setCep] = useState('')
+  const [cep, setCep] = useState(globalCep || '')
   const [frete, setFrete] = useState(null)
   const [showSpecs, setShowSpecs] = useState(false)
+
+  // Auto-preenche e auto-calcula o frete caso haja um CEP global definido
+  useEffect(() => {
+    const activeCep = globalCep || cep
+    if (activeCep) {
+      setCep(activeCep)
+      const clean = activeCep.replace(/\D/g, '')
+      if (clean.length === 8 && product) {
+        const result = calcularFrete(clean, 0.5, (product.price || 0) * qty)
+        setFrete(result)
+      }
+    }
+  }, [product, globalCep, qty])
 
   if (!product) return null
 
@@ -18,8 +39,11 @@ export default function ProductModal() {
     : 0
 
   const handleCalcFrete = (cepVal = cep) => {
-    const result = calcularFrete(cepVal, 0.5, product.price * qty)
-    setFrete(result)
+    const clean = cepVal.replace(/\D/g, '')
+    if (clean.length === 8) {
+      const result = calcularFrete(clean, 0.5, product.price * qty)
+      setFrete(result)
+    }
   }
 
   const handleCepInput = (val) => {
@@ -128,7 +152,17 @@ export default function ProductModal() {
 
             {/* Freight */}
             <div className="pm-frete">
-              <h4><Truck size={16} /> Calcular Frete</h4>
+              <div className="pm-frete-header-row">
+                <h4><Truck size={16} /> Envio dos Correios</h4>
+                {globalAddress ? (
+                  <span className="pm-frete-dest-badge" title="Endereço de entrega selecionado no topo">
+                    <MapPin size={12} /> {globalAddress.cidade} - {globalAddress.estado}
+                  </span>
+                ) : (
+                  <span className="pm-frete-dest-hint">Calcule para sua região</span>
+                )}
+              </div>
+
               <div className="pm-frete-input">
                 <input
                   type="text"
@@ -138,8 +172,11 @@ export default function ProductModal() {
                   onChange={e => handleCepInput(e.target.value)}
                   maxLength={9}
                 />
-                <button className="btn btn-outline btn-sm" onClick={() => handleCalcFrete(cep)}>Calcular</button>
+                <button className="btn btn-outline btn-sm" onClick={() => handleCalcFrete(cep)}>
+                  {frete ? 'Recalcular' : 'Calcular'}
+                </button>
               </div>
+
               {frete && !frete.error && (
                 <div className="pm-frete-results">
                   {frete.opcoes.map(op => (
@@ -253,7 +290,21 @@ export default function ProductModal() {
           .pm-qty-row { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-sm); font-weight: 500; }
           .pm-add-btn { width: 100%; }
           .pm-frete { padding: var(--space-4); background: var(--dark-50); border-radius: var(--radius-lg); }
-          .pm-frete h4 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); margin-bottom: var(--space-3); }
+          .pm-frete-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); flex-wrap: wrap; gap: 6px; }
+          .pm-frete h4 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); margin-bottom: 0; }
+          .pm-frete-dest-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            background: #dcfce7;
+            color: #166534;
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+            border: 1px solid #86efac;
+          }
+          .pm-frete-dest-hint { font-size: 11px; color: var(--dark-400); }
           .pm-frete-input { display: flex; gap: var(--space-2); }
           .pm-frete-input .input-field { max-width: 160px; }
           .pm-frete-results { margin-top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }

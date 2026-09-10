@@ -21,7 +21,9 @@ export default function CheckoutModal() {
     cartTotal,
     createOrder,
     showToast,
-    customerProfile
+    customerProfile,
+    globalCep,
+    globalAddress
   } = useStore()
   const [step, setStep] = useState(1) // 1=dados, 2=frete, 3=pagamento, 4=confirmação
 
@@ -30,41 +32,49 @@ export default function CheckoutModal() {
     email: customerProfile?.email || '',
     cpf: customerProfile?.cpf || '',
     telefone: customerProfile?.telefone || '',
-    cep: customerProfile?.cep || '',
-    endereco: customerProfile?.endereco || '',
+    cep: customerProfile?.cep || globalCep || '',
+    endereco: customerProfile?.endereco || globalAddress?.logradouro || '',
     numero: customerProfile?.numero || '',
     complemento: customerProfile?.complemento || '',
-    bairro: customerProfile?.bairro || '',
-    cidade: customerProfile?.cidade || '',
-    estado: customerProfile?.estado || ''
+    bairro: customerProfile?.bairro || globalAddress?.bairro || '',
+    cidade: customerProfile?.cidade || globalAddress?.cidade || '',
+    estado: customerProfile?.estado || globalAddress?.estado || ''
   }))
 
-  // Atualiza cliente caso o perfil mude
+  // Atualiza cliente caso o perfil mude ou haja um CEP/endereço global definido
   useEffect(() => {
-    if (customerProfile?.nome || customerProfile?.email) {
-      setCliente(prev => ({
-        ...prev,
-        nome: prev.nome || customerProfile.nome || '',
-        email: prev.email || customerProfile.email || '',
-        cpf: prev.cpf || customerProfile.cpf || '',
-        telefone: prev.telefone || customerProfile.telefone || '',
-        cep: prev.cep || customerProfile.cep || '',
-        endereco: prev.endereco || customerProfile.endereco || '',
-        numero: prev.numero || customerProfile.numero || '',
-        complemento: prev.complemento || customerProfile.complemento || '',
-        bairro: prev.bairro || customerProfile.bairro || '',
-        cidade: prev.cidade || customerProfile.cidade || '',
-        estado: prev.estado || customerProfile.estado || ''
-      }))
-    }
-  }, [customerProfile])
+    setCliente(prev => ({
+      ...prev,
+      nome: prev.nome || customerProfile?.nome || '',
+      email: prev.email || customerProfile?.email || '',
+      cpf: prev.cpf || customerProfile?.cpf || '',
+      telefone: prev.telefone || customerProfile?.telefone || '',
+      cep: prev.cep || customerProfile?.cep || globalCep || '',
+      endereco: prev.endereco || customerProfile?.endereco || globalAddress?.logradouro || '',
+      numero: prev.numero || customerProfile?.numero || '',
+      complemento: prev.complemento || customerProfile?.complemento || '',
+      bairro: prev.bairro || customerProfile?.bairro || globalAddress?.bairro || '',
+      cidade: prev.cidade || customerProfile?.cidade || globalAddress?.cidade || '',
+      estado: prev.estado || customerProfile?.estado || globalAddress?.estado || ''
+    }))
+  }, [customerProfile, globalCep, globalAddress])
 
   const [isCepLoading, setIsCepLoading] = useState(false)
   const [cepFeedback, setCepFeedback] = useState(null) // { type: 'success' | 'error', message: string }
   const [freteResult, setFreteResult] = useState(null)
   const [selectedFrete, setSelectedFrete] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState(null) // 'boleto' | 'link' | 'pix'
-  const [orderResult, setOrderResult] = useState(null)
+  // Pré-calcula opções de frete automaticamente se já tiver CEP válido preenchido
+  useEffect(() => {
+    const clean = (cliente.cep || '').replace(/\D/g, '')
+    if (clean.length === 8 && !freteResult) {
+      const freteRes = calcularFrete(clean, 0.5, cartTotal)
+      if (!freteRes.error) {
+        setFreteResult(freteRes)
+        setSelectedFrete(freteRes.opcoes[0])
+      }
+    }
+  }, [cliente.cep, cartTotal, freteResult])
 
   if (!showCheckout) return null
 

@@ -13,21 +13,11 @@ import {
   MapPin,
   Flame,
   ArrowRight,
-  PackageCheck
+  PackageCheck,
+  History
 } from 'lucide-react'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
-
-const TOP_SEARCH_TERMS = [
-  'Monitor Gamer',
-  'Cadeira Ergonomica',
-  'Teclado Mecanico',
-  'Parafusadeira',
-  'Samsung',
-  'Notebook',
-  'SSD Kingston',
-  'Cafeteira'
-]
 
 export default function Header() {
   const {
@@ -51,6 +41,74 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const searchContainerRef = useRef(null)
+
+  // Memória viva: buscas recentes do usuário
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      const saved = localStorage.getItem('infodesk_recent_searches')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  // Memória viva: frequência real dos termos buscados
+  const [searchCounts, setSearchCounts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('infodesk_search_counts')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  // Registra um termo na memória viva
+  const recordSearch = (term) => {
+    if (!term || term.trim().length < 2) return
+    const clean = term.trim()
+
+    // Atualiza buscas recentes (mantém as últimas 5)
+    setRecentSearches(prev => {
+      const updated = [clean, ...prev.filter(t => t.toLowerCase() !== clean.toLowerCase())].slice(0, 5)
+      localStorage.setItem('infodesk_recent_searches', JSON.stringify(updated))
+      return updated
+    })
+
+    // Incrementa contador de tendências
+    setSearchCounts(prev => {
+      const key = clean.toLowerCase()
+      const updated = { ...prev, [key]: (prev[key] || 0) + 1 }
+      localStorage.setItem('infodesk_search_counts', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const handleClearRecents = (e) => {
+    e.stopPropagation()
+    setRecentSearches([])
+    localStorage.removeItem('infodesk_recent_searches')
+  }
+
+  // Gera os termos mais buscados reais ordenados pela frequência com semente inicial dos produtos mais vendidos
+  const trendingTerms = useMemo(() => {
+    const countedTerms = Object.entries(searchCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(entry => entry[0])
+
+    const fallbackCatalog = [
+      'Monitor Gamer', 'Cadeira Ergonômica', 'Mouse Sem Fio',
+      'SSD Kingston', 'Samsung', 'Notebook', 'Parafusadeira', 'Cafeteira'
+    ]
+
+    const merged = [...countedTerms]
+    for (const fb of fallbackCatalog) {
+      if (!merged.some(m => m.toLowerCase() === fb.toLowerCase())) {
+        merged.push(fb)
+      }
+      if (merged.length >= 8) break
+    }
+    return merged.slice(0, 8)
+  }, [searchCounts])
 
   // Extrai resultados preditivos em tempo real
   const predictiveResults = useMemo(() => {
@@ -77,11 +135,13 @@ export default function Header() {
   }, [])
 
   const handleSelectPredictive = (prod) => {
+    recordSearch(prod.name)
     setSelectedProduct(prod)
     setSearchFocused(false)
   }
 
   const handleSelectTerm = (term) => {
+    recordSearch(term)
     setSearchQuery(term)
     setSearchFocused(false)
     const element = document.getElementById('products')
@@ -156,6 +216,14 @@ export default function Header() {
             onFocus={() => setSearchFocused(true)}
             onKeyDown={e => {
               if (e.key === 'Escape') setSearchFocused(false)
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                recordSearch(searchQuery)
+                setSearchFocused(false)
+                const element = document.getElementById('products')
+                if (element) {
+                  element.scrollIntoView({ behavior: 'smooth' })
+                }
+              }
             }}
           />
           {searchQuery && (
@@ -222,12 +290,42 @@ export default function Header() {
                 </div>
               ) : (
                 <div className="predictive-suggestions">
+                  {recentSearches.length > 0 && (
+                    <div className="predictive-recent-block">
+                      <div className="predictive-suggestions-title" style={{ justifyContent: 'space-between' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <History size={14} style={{ color: '#0284c7' }} /> Suas buscas recentes
+                        </span>
+                        <button
+                          type="button"
+                          className="predictive-clear-history-btn"
+                          onClick={handleClearRecents}
+                          title="Limpar histórico de buscas"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                      <div className="predictive-tags" style={{ marginBottom: '14px' }}>
+                        {recentSearches.map(term => (
+                          <button
+                            key={term}
+                            type="button"
+                            className="predictive-tag-chip recent"
+                            onClick={() => handleSelectTerm(term)}
+                          >
+                            <History size={11} style={{ opacity: 0.7 }} /> {term}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="predictive-suggestions-title">
                     <Flame size={15} className="text-amber" />
                     <span>Termos mais buscados</span>
                   </div>
                   <div className="predictive-tags">
-                    {TOP_SEARCH_TERMS.map(term => (
+                    {trendingTerms.map(term => (
                       <button
                         key={term}
                         type="button"
@@ -632,6 +730,31 @@ export default function Header() {
           background: #38bdf8;
           color: #ffffff;
           border-color: #38bdf8;
+        }
+        .predictive-tag-chip.recent {
+          background: #f0f9ff;
+          border-color: #bae6fd;
+          color: #0369a1;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+        }
+        .predictive-tag-chip.recent:hover {
+          background: #0284c7;
+          border-color: #0284c7;
+          color: #ffffff;
+        }
+        .predictive-clear-history-btn {
+          font-size: 11px;
+          color: var(--dark-400);
+          background: none;
+          border: none;
+          cursor: pointer;
+          text-decoration: underline;
+          padding: 0 4px;
+        }
+        .predictive-clear-history-btn:hover {
+          color: var(--red);
         }
 
         .header-actions {
