@@ -40,7 +40,9 @@ export default function Header() {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
+  const [mobileSearchFocused, setMobileSearchFocused] = useState(false)
   const searchContainerRef = useRef(null)
+  const mobileSearchContainerRef = useRef(null)
 
   // Memória viva: buscas recentes do usuário
   const [recentSearches, setRecentSearches] = useState(() => {
@@ -89,25 +91,47 @@ export default function Header() {
     localStorage.removeItem('infodesk_recent_searches')
   }
 
-  // Gera os termos mais buscados reais ordenados pela frequência com semente inicial dos produtos mais vendidos
+  const handleRemoveRecent = (e, termToRemove) => {
+    e.stopPropagation()
+    setRecentSearches(prev => {
+      const updated = prev.filter(t => t !== termToRemove)
+      localStorage.setItem('infodesk_recent_searches', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  // Gera os termos mais buscados reais ordenados pela frequência com ranking visual
   const trendingTerms = useMemo(() => {
-    const countedTerms = Object.entries(searchCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(entry => entry[0])
-
-    const fallbackCatalog = [
-      'Monitor Gamer', 'Cadeira Ergonômica', 'Mouse Sem Fio',
-      'SSD Kingston', 'Samsung', 'Notebook', 'Parafusadeira', 'Cafeteira'
-    ]
-
-    const merged = [...countedTerms]
-    for (const fb of fallbackCatalog) {
-      if (!merged.some(m => m.toLowerCase() === fb.toLowerCase())) {
-        merged.push(fb)
-      }
-      if (merged.length >= 8) break
+    const initialSeed = {
+      'Monitor Gamer': 42,
+      'Cadeira Ergonômica': 35,
+      'Mouse Sem Fio': 28,
+      'SSD Kingston': 25,
+      'Notebook': 20,
+      'Samsung': 17,
+      'Parafusadeira': 14,
+      'Cafeteira': 11
     }
-    return merged.slice(0, 8)
+
+    const mergedCounts = { ...initialSeed }
+    Object.entries(searchCounts).forEach(([term, count]) => {
+      const matchKey = Object.keys(mergedCounts).find(k => k.toLowerCase() === term.toLowerCase())
+      if (matchKey) {
+        mergedCounts[matchKey] = Math.max(mergedCounts[matchKey], count)
+      } else {
+        const capitalized = term.charAt(0).toUpperCase() + term.slice(1)
+        mergedCounts[capitalized] = count
+      }
+    })
+
+    return Object.entries(mergedCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([term, count], index) => ({
+        rank: index + 1,
+        term,
+        count
+      }))
   }, [searchCounts])
 
   // Extrai resultados preditivos em tempo real
@@ -129,6 +153,9 @@ export default function Header() {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
         setSearchFocused(false)
       }
+      if (mobileSearchContainerRef.current && !mobileSearchContainerRef.current.contains(e.target)) {
+        setMobileSearchFocused(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -138,17 +165,138 @@ export default function Header() {
     recordSearch(prod.name)
     setSelectedProduct(prod)
     setSearchFocused(false)
+    setMobileSearchFocused(false)
   }
 
   const handleSelectTerm = (term) => {
     recordSearch(term)
     setSearchQuery(term)
     setSearchFocused(false)
+    setMobileSearchFocused(false)
     const element = document.getElementById('products')
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' })
     }
   }
+
+  // Renderiza o Dropdown Preditivo Inteligente com Memória Viva e Ranking
+  const renderPredictiveDropdown = () => (
+    <div className="predictive-dropdown">
+      {predictiveResults.length > 0 ? (
+        <div className="predictive-results">
+          <div className="predictive-header">
+            <span>Produtos sugeridos ({predictiveResults.length})</span>
+            <a href="#products" onClick={() => { setSearchFocused(false); setMobileSearchFocused(false) }}>
+              Ver todos os resultados
+            </a>
+          </div>
+
+          {predictiveResults.map(p => {
+            const pixPrice = (parseFloat(p.price) || 0) * 0.97
+            return (
+              <div
+                key={p.id}
+                className="predictive-item"
+                onClick={() => handleSelectPredictive(p)}
+              >
+                <img
+                  src={p.images?.[0] || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=100&fit=crop'}
+                  alt={p.name}
+                  className="predictive-img"
+                />
+                <div className="predictive-info">
+                  <div className="predictive-brand-row">
+                    <span className="predictive-brand">{p.brand}</span>
+                    <span className="predictive-cat">• {p.category}</span>
+                  </div>
+                  <strong className="predictive-name">{p.name}</strong>
+                  <div className="predictive-price-row">
+                    <span className="predictive-price-pix">
+                      R$ {pixPrice.toFixed(2).replace('.', ',')} <small>no Pix (3% OFF)</small>
+                    </span>
+                    {p.stock > 0 ? (
+                      <span className="predictive-stock-ok">
+                        <PackageCheck size={12} /> Em estoque
+                      </span>
+                    ) : (
+                      <span className="predictive-stock-out">Indisponível</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : searchQuery.trim().length >= 2 ? (
+        <div className="predictive-empty">
+          <p>Nenhum produto encontrado para "<strong>{searchQuery}</strong>".</p>
+          <span>Tente buscar por termos mais genéricos ou marcas.</span>
+        </div>
+      ) : (
+        <div className="predictive-suggestions">
+          {recentSearches.length > 0 && (
+            <div className="predictive-recent-block">
+              <div className="predictive-suggestions-title" style={{ justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <History size={14} style={{ color: '#0284c7' }} /> Suas buscas recentes
+                </span>
+                <button
+                  type="button"
+                  className="predictive-clear-history-btn"
+                  onClick={handleClearRecents}
+                  title="Limpar histórico de buscas"
+                >
+                  Limpar histórico
+                </button>
+              </div>
+              <div className="predictive-tags" style={{ marginBottom: '16px' }}>
+                {recentSearches.map(term => (
+                  <div key={term} className="predictive-recent-chip-wrap">
+                    <button
+                      type="button"
+                      className="predictive-tag-chip recent"
+                      onClick={() => handleSelectTerm(term)}
+                    >
+                      <History size={11} style={{ opacity: 0.7 }} /> {term}
+                    </button>
+                    <button
+                      type="button"
+                      className="predictive-recent-del"
+                      onClick={(e) => handleRemoveRecent(e, term)}
+                      title="Excluir do histórico"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="predictive-suggestions-title">
+            <Flame size={15} className="text-amber" />
+            <span>Ranking Real de Tendências</span>
+          </div>
+          <div className="predictive-tags">
+            {trendingTerms.map(item => (
+              <button
+                key={item.term}
+                type="button"
+                className={`predictive-tag-chip trending-rank ${item.rank <= 3 ? 'top-rank' : ''}`}
+                onClick={() => handleSelectTerm(item.term)}
+              >
+                <span className="rank-num">#{item.rank}</span>
+                <span className="rank-title">{item.term}</span>
+                {item.count > 0 && (
+                  <span className="rank-count">{item.count} buscas</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <header className="header">
@@ -199,7 +347,7 @@ export default function Header() {
           <div className="header-cep-info">
             <span className="header-cep-sub">Enviar para</span>
             <strong className="header-cep-city">
-              {globalAddress?.cidade ? `${globalAddress.cidade}/${globalAddress.estado}` : 'Informe seu CEP'}
+              {globalAddress?.cidade ? `${globalAddress.cidade} - ${globalAddress.estado}` : 'Informe seu CEP'}
             </strong>
           </div>
         </button>
@@ -238,108 +386,7 @@ export default function Header() {
           )}
 
           {/* Predictive Search Dropdown */}
-          {searchFocused && (
-            <div className="predictive-dropdown">
-              {predictiveResults.length > 0 ? (
-                <div className="predictive-results">
-                  <div className="predictive-header">
-                    <span>Produtos sugeridos ({predictiveResults.length})</span>
-                    <a href="#products" onClick={() => setSearchFocused(false)}>Ver todos os resultados</a>
-                  </div>
-
-                  {predictiveResults.map(p => {
-                    const pixPrice = (parseFloat(p.price) || 0) * 0.97
-                    return (
-                      <div
-                        key={p.id}
-                        className="predictive-item"
-                        onClick={() => handleSelectPredictive(p)}
-                      >
-                        <img
-                          src={p.images?.[0] || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=100&fit=crop'}
-                          alt={p.name}
-                          className="predictive-img"
-                        />
-                        <div className="predictive-info">
-                          <div className="predictive-brand-row">
-                            <span className="predictive-brand">{p.brand}</span>
-                            <span className="predictive-cat">• {p.category}</span>
-                          </div>
-                          <strong className="predictive-name">{p.name}</strong>
-                          <div className="predictive-price-row">
-                            <span className="predictive-price-pix">
-                              R$ {pixPrice.toFixed(2).replace('.', ',')} <small>no Pix (3% OFF)</small>
-                            </span>
-                            {p.stock > 0 ? (
-                              <span className="predictive-stock-ok">
-                                <PackageCheck size={12} /> Em estoque
-                              </span>
-                            ) : (
-                              <span className="predictive-stock-out">Indisponível</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : searchQuery.trim().length >= 2 ? (
-                <div className="predictive-empty">
-                  <p>Nenhum produto encontrado para "<strong>{searchQuery}</strong>".</p>
-                  <span>Tente buscar por termos mais genéricos ou marcas.</span>
-                </div>
-              ) : (
-                <div className="predictive-suggestions">
-                  {recentSearches.length > 0 && (
-                    <div className="predictive-recent-block">
-                      <div className="predictive-suggestions-title" style={{ justifyContent: 'space-between' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <History size={14} style={{ color: '#0284c7' }} /> Suas buscas recentes
-                        </span>
-                        <button
-                          type="button"
-                          className="predictive-clear-history-btn"
-                          onClick={handleClearRecents}
-                          title="Limpar histórico de buscas"
-                        >
-                          Limpar
-                        </button>
-                      </div>
-                      <div className="predictive-tags" style={{ marginBottom: '14px' }}>
-                        {recentSearches.map(term => (
-                          <button
-                            key={term}
-                            type="button"
-                            className="predictive-tag-chip recent"
-                            onClick={() => handleSelectTerm(term)}
-                          >
-                            <History size={11} style={{ opacity: 0.7 }} /> {term}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="predictive-suggestions-title">
-                    <Flame size={15} className="text-amber" />
-                    <span>Termos mais buscados</span>
-                  </div>
-                  <div className="predictive-tags">
-                    {trendingTerms.map(term => (
-                      <button
-                        key={term}
-                        type="button"
-                        className="predictive-tag-chip"
-                        onClick={() => handleSelectTerm(term)}
-                      >
-                        {term}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {searchFocused && renderPredictiveDropdown()}
         </div>
 
         {/* Actions */}
@@ -407,7 +454,7 @@ export default function Header() {
             </span>
           </button>
 
-          <div className="header-search">
+          <div className="header-search" ref={mobileSearchContainerRef}>
             <Search size={18} className="header-search-icon" />
             <input
               type="text"
@@ -415,6 +462,18 @@ export default function Header() {
               placeholder="O que você procura hoje?..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              onFocus={() => setMobileSearchFocused(true)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setMobileSearchFocused(false)
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  recordSearch(searchQuery)
+                  setMobileSearchFocused(false)
+                  const element = document.getElementById('products')
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth' })
+                  }
+                }
+              }}
             />
             {searchQuery && (
               <button
@@ -425,6 +484,9 @@ export default function Header() {
                 <X size={14} />
               </button>
             )}
+
+            {/* Mobile Predictive Dropdown */}
+            {mobileSearchFocused && renderPredictiveDropdown()}
           </div>
         </div>
       </div>
@@ -725,23 +787,51 @@ export default function Header() {
           color: var(--dark-700);
           cursor: pointer;
           transition: all 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
         }
         .predictive-tag-chip:hover {
           background: #38bdf8;
           color: #ffffff;
           border-color: #38bdf8;
         }
-        .predictive-tag-chip.recent {
-          background: #f0f9ff;
-          border-color: #bae6fd;
-          color: #0369a1;
+        
+        /* Recent Searches with individual delete */
+        .predictive-recent-chip-wrap {
           display: inline-flex;
           align-items: center;
-          gap: 5px;
+          background: #f0f9ff;
+          border: 1px solid #bae6fd;
+          border-radius: var(--radius-full);
+          padding-right: 6px;
+          transition: all 0.15s ease;
         }
-        .predictive-tag-chip.recent:hover {
-          background: #0284c7;
-          border-color: #0284c7;
+        .predictive-recent-chip-wrap:hover {
+          border-color: #38bdf8;
+          box-shadow: 0 2px 6px rgba(56, 189, 248, 0.15);
+        }
+        .predictive-tag-chip.recent {
+          background: none;
+          border: none;
+          color: #0369a1;
+          padding: 5px 6px 5px 10px;
+        }
+        .predictive-recent-del {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: none;
+          background: rgba(3, 105, 161, 0.1);
+          color: #0369a1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .predictive-recent-del:hover {
+          background: #ef4444;
           color: #ffffff;
         }
         .predictive-clear-history-btn {
@@ -755,6 +845,44 @@ export default function Header() {
         }
         .predictive-clear-history-btn:hover {
           color: var(--red);
+        }
+
+        /* Trending Ranking */
+        .predictive-tag-chip.trending-rank {
+          background: #ffffff;
+          border: 1px solid var(--dark-200);
+          padding: 4px 10px;
+        }
+        .predictive-tag-chip.trending-rank.top-rank {
+          border-color: #fdba74;
+          background: #fff7ed;
+        }
+        .predictive-tag-chip.trending-rank.top-rank .rank-num {
+          background: #ea580c;
+          color: #ffffff;
+        }
+        .rank-num {
+          font-size: 10px;
+          font-weight: 800;
+          background: var(--dark-200);
+          color: var(--dark-700);
+          padding: 1px 5px;
+          border-radius: 4px;
+        }
+        .rank-title {
+          font-weight: 600;
+          color: var(--dark-800);
+        }
+        .rank-count {
+          font-size: 10px;
+          color: var(--dark-400);
+          margin-left: 2px;
+        }
+        .predictive-tag-chip.trending-rank:hover .rank-title {
+          color: #ffffff;
+        }
+        .predictive-tag-chip.trending-rank:hover .rank-count {
+          color: rgba(255, 255, 255, 0.8);
         }
 
         .header-actions {
