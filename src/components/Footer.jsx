@@ -158,24 +158,6 @@ export default function Footer() {
                   <span>lucas@infodesk.net.br</span>
                 </div>
               </a>
-
-              {/* Endereço Físico / Sede */}
-              <a
-                href="https://www.google.com/maps/search/?api=1&query=CLSW+304+Bloco+A+Sala+108%2C+Sudoeste%2C+Bras%C3%ADlia+-+DF%2C+70673-631"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="footer-contact-item footer-contact-maps"
-                title="Abrir localização no Google Maps"
-              >
-                <span className="footer-contact-icon maps">
-                  <MapPin size={16} />
-                </span>
-                <div className="footer-contact-text">
-                  <span className="footer-contact-label">Sede / Endereço Físico</span>
-                  <strong>CLSW 304 Bloco A Sala 108</strong>
-                  <span>Sudoeste · Brasília - DF · CEP 70.673-631</span>
-                </div>
-              </a>
             </div>
           </div>
           <div className="footer-bottom">
