@@ -160,8 +160,14 @@ export default function Footer() {
               </a>
 
               {/* Endereço Físico / Sede */}
-              <div className="footer-contact-item footer-contact-static">
-                <span className="footer-contact-icon">
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=CLSW+304+Bloco+A+Sala+108%2C+Sudoeste%2C+Bras%C3%ADlia+-+DF%2C+70673-631"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="footer-contact-item footer-contact-maps"
+                title="Abrir localização no Google Maps"
+              >
+                <span className="footer-contact-icon maps">
                   <MapPin size={16} />
                 </span>
                 <div className="footer-contact-text">
@@ -169,7 +175,7 @@ export default function Footer() {
                   <strong>CLSW 304 Bloco A Sala 108</strong>
                   <span>Sudoeste · Brasília - DF · CEP 70.673-631</span>
                 </div>
-              </div>
+              </a>
             </div>
           </div>
           <div className="footer-bottom">
@@ -179,10 +185,16 @@ export default function Footer() {
                   © {new Date().getFullYear()} <strong>Infodesk Informática</strong> — CNPJ 15.266.716/0001-02
                 </p>
                 <span className="footer-corp-sep hide-mobile">•</span>
-                <p className="footer-corp-address">
-                  <MapPin size={13} className="footer-corp-pin" />
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=CLSW+304+Bloco+A+Sala+108%2C+Sudoeste%2C+Bras%C3%ADlia+-+DF%2C+70673-631"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="footer-corp-address-link"
+                  title="Abrir endereço no Google Maps"
+                >
+                  <MapPin size={14} className="footer-corp-pin" />
                   <span>CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília - DF · CEP 70.673-631</span>
-                </p>
+                </a>
               </div>
               <p className="footer-corp-sub">
                 Atendimento presencial e centro de distribuição com envios expressos para todo o território nacional.
@@ -350,17 +362,35 @@ export default function Footer() {
           color: var(--dark-600);
           font-size: 10px;
         }
-        .footer-corp-address {
+        .footer-corp-address-link {
           display: inline-flex;
           align-items: center;
           gap: 5px;
           font-size: var(--text-xs);
           color: #94a3b8;
-          margin: 0;
+          text-decoration: none;
+          transition: all var(--transition-fast);
+          cursor: pointer;
+        }
+        .footer-corp-address-link:hover {
+          color: #38bdf8;
+        }
+        .footer-corp-address-link:hover .footer-corp-pin {
+          transform: scale(1.3);
+          color: #60a5fa;
         }
         .footer-corp-pin {
           color: #38bdf8;
           flex-shrink: 0;
+          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+        }
+        .footer-contact-icon.maps {
+          background: rgba(56, 189, 248, 0.15);
+          color: #38bdf8;
+        }
+        .footer-contact-item.footer-contact-maps:hover {
+          border-color: #38bdf8;
+          background: rgba(56, 189, 248, 0.06);
         }
         .footer-corp-sub {
           font-size: 11px;
