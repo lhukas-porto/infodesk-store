@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { Truck, CreditCard, ShieldCheck, Headphones, Mail, Phone } from 'lucide-react'
+import { Truck, CreditCard, ShieldCheck, Headphones, Mail, Phone, MapPin } from 'lucide-react'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
 
@@ -158,11 +158,35 @@ export default function Footer() {
                   <span>lucas@infodesk.net.br</span>
                 </div>
               </a>
+
+              {/* Endereço Físico / Sede */}
+              <div className="footer-contact-item footer-contact-static">
+                <span className="footer-contact-icon">
+                  <MapPin size={16} />
+                </span>
+                <div className="footer-contact-text">
+                  <span className="footer-contact-label">Sede / Endereço Físico</span>
+                  <strong>CLSW 304 Bloco A Sala 108</strong>
+                  <span>Sudoeste · Brasília - DF · CEP 70.673-631</span>
+                </div>
+              </div>
             </div>
           </div>
           <div className="footer-bottom">
-            <div className="footer-copyright" onClick={handleSecretClick} style={{ cursor: 'default' }}>
-              <p>© {new Date().getFullYear()} Infodesk Informática — CNPJ 15.266.716/0001-02</p>
+            <div className="footer-corporate-info" onClick={handleSecretClick} style={{ cursor: 'default' }}>
+              <div className="footer-corp-line">
+                <p className="footer-corp-title">
+                  © {new Date().getFullYear()} <strong>Infodesk Informática</strong> — CNPJ 15.266.716/0001-02
+                </p>
+                <span className="footer-corp-sep hide-mobile">•</span>
+                <p className="footer-corp-address">
+                  <MapPin size={13} className="footer-corp-pin" />
+                  <span>CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília - DF · CEP 70.673-631</span>
+                </p>
+              </div>
+              <p className="footer-corp-sub">
+                Atendimento presencial e centro de distribuição com envios expressos para todo o território nacional.
+              </p>
             </div>
             <div className="footer-payments">
               <span className="badge badge-dark">Visa</span>
@@ -302,13 +326,56 @@ export default function Footer() {
           font-size: var(--text-xs);
         }
 
+        .footer-corporate-info {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          color: var(--dark-400);
+        }
+        .footer-corp-line {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .footer-corp-title {
+          font-size: var(--text-xs);
+          color: var(--dark-300);
+          margin: 0;
+        }
+        .footer-corp-title strong {
+          color: var(--white);
+        }
+        .footer-corp-sep {
+          color: var(--dark-600);
+          font-size: 10px;
+        }
+        .footer-corp-address {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: var(--text-xs);
+          color: #94a3b8;
+          margin: 0;
+        }
+        .footer-corp-pin {
+          color: #38bdf8;
+          flex-shrink: 0;
+        }
+        .footer-corp-sub {
+          font-size: 11px;
+          color: var(--dark-500);
+          margin: 0;
+          line-height: 1.4;
+        }
+
         .footer-bottom {
           margin-top: var(--space-8);
           padding-top: var(--space-6);
           border-top: 1px solid var(--dark-800);
           display: flex;
           flex-direction: column;
-          gap: var(--space-3);
+          gap: var(--space-4);
           align-items: center;
           text-align: center;
         }
@@ -319,7 +386,6 @@ export default function Footer() {
             text-align: left;
           }
         }
-        .footer-bottom p { font-size: var(--text-xs); }
         .footer-payments { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: center; align-items: center; }
         .footer-secret-btn {
           background: transparent;
