@@ -25,6 +25,10 @@ export function mapDbProductToApp(dbProd) {
     featured: Boolean(dbProd.featured),
     ean: dbProd.ean || '',
     active: dbProd.active !== false,
+    weight: parseInt(dbProd.weight_g, 10) || 500,
+    length: parseInt(dbProd.length_cm, 10) || 20,
+    width: parseInt(dbProd.width_cm, 10) || 15,
+    height: parseInt(dbProd.height_cm, 10) || 10,
     createdAt: dbProd.created_at,
     updatedAt: dbProd.updated_at
   }
@@ -52,6 +56,10 @@ export function mapAppProductToDb(appProd) {
     sold: parseInt(appProd.sold) || 0,
     featured: Boolean(appProd.featured),
     ean: appProd.ean || '',
+    weight_g: parseInt(appProd.weight, 10) || 500,
+    length_cm: parseInt(appProd.length, 10) || 20,
+    width_cm: parseInt(appProd.width, 10) || 15,
+    height_cm: parseInt(appProd.height, 10) || 10,
     active: appProd.active !== false
   }
 }

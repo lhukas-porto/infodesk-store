@@ -6,6 +6,8 @@ import {
 import { useStore } from '../context/StoreContext'
 import {
   calcularFrete,
+  cotarFreteOficial,
+  validarFreteNoBackend,
   consultarCep,
   formatCep,
   formatCpf,
@@ -26,62 +28,83 @@ export default function CheckoutModal() {
     globalCep,
     globalAddress
   } = useStore()
-  const [step, setStep] = useState(1) // 1=dados, 2=frete, 3=pagamento, 4=confirmação
+  const [step, setStep] = useState(1) // 1: Info, 2: Freight, 3: Payment, 4: Success
+  const [cliente, setCliente] = useState({
+    nome: '',
+    email: '',
+    cpf: '',
+    telefone: '',
+    cep: '',
+    endereco: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: ''
+  })
 
-  const [cliente, setCliente] = useState(() => ({
-    nome: customerProfile?.nome || '',
-    email: customerProfile?.email || '',
-    cpf: customerProfile?.cpf || '',
-    telefone: customerProfile?.telefone || '',
-    cep: customerProfile?.cep || globalCep || '',
-    endereco: customerProfile?.endereco || globalAddress?.logradouro || '',
-    numero: customerProfile?.numero || '',
-    complemento: customerProfile?.complemento || '',
-    bairro: customerProfile?.bairro || globalAddress?.bairro || '',
-    cidade: customerProfile?.cidade || globalAddress?.cidade || '',
-    estado: customerProfile?.estado || globalAddress?.estado || ''
-  }))
-
-  // Atualiza cliente caso o perfil mude ou haja um CEP/endereço global definido
+  // Sincroniza dados com o perfil logado ou CEP global
   useEffect(() => {
     setCliente(prev => ({
       ...prev,
-      nome: prev.nome || customerProfile?.nome || '',
-      email: prev.email || customerProfile?.email || '',
-      cpf: prev.cpf || customerProfile?.cpf || '',
-      telefone: prev.telefone || customerProfile?.telefone || '',
-      cep: prev.cep || customerProfile?.cep || globalCep || '',
-      endereco: prev.endereco || customerProfile?.endereco || globalAddress?.logradouro || '',
-      numero: prev.numero || customerProfile?.numero || '',
-      complemento: prev.complemento || customerProfile?.complemento || '',
-      bairro: prev.bairro || customerProfile?.bairro || globalAddress?.bairro || '',
-      cidade: prev.cidade || customerProfile?.cidade || globalAddress?.cidade || '',
-      estado: prev.estado || customerProfile?.estado || globalAddress?.estado || ''
+      nome: customerProfile?.nome || prev.nome,
+      email: customerProfile?.email || prev.email,
+      cpf: customerProfile?.cpf ? formatCpf(customerProfile.cpf) : prev.cpf,
+      telefone: customerProfile?.telefone ? formatPhone(customerProfile.telefone) : prev.telefone,
+      cep: customerProfile?.cep ? formatCep(customerProfile.cep) : (globalCep ? formatCep(globalCep) : prev.cep),
+      endereco: customerProfile?.endereco || globalAddress?.logradouro || prev.endereco,
+      numero: customerProfile?.numero || prev.numero,
+      complemento: customerProfile?.complemento || prev.complemento,
+      bairro: customerProfile?.bairro || globalAddress?.bairro || prev.bairro,
+      cidade: customerProfile?.cidade || globalAddress?.cidade || prev.cidade,
+      estado: customerProfile?.estado || globalAddress?.estado || prev.estado,
     }))
   }, [customerProfile, globalCep, globalAddress])
 
   const [isCepLoading, setIsCepLoading] = useState(false)
+  const [isFreteLoading, setIsFreteLoading] = useState(false)
+  const [isValidatingOrder, setIsValidatingOrder] = useState(false)
   const [cepFeedback, setCepFeedback] = useState(null) // { type: 'success' | 'error', message: string }
   const [freteResult, setFreteResult] = useState(null)
   const [selectedFrete, setSelectedFrete] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState(null) // 'boleto' | 'link' | 'pix'
+  const [orderResult, setOrderResult] = useState(null)
   // Calcula o peso acumulado de todos os itens e quantidades no carrinho
   const totalCartWeight = (cart || []).reduce((acc, item) => {
     return acc + (getProductWeight(item) * (item.qty || 1))
   }, 0)
   const finalCartWeight = Math.max(0.5, Math.round(totalCartWeight * 10) / 10)
 
+  // Função para cotar frete oficial no backend
+  const fetchFrete = async (cleanCep) => {
+    if (!cleanCep || cleanCep.length !== 8) return
+    setIsFreteLoading(true)
+    try {
+      const res = await cotarFreteOficial(cleanCep, cart, cartTotal)
+      if (!res.error && res.opcoes && res.opcoes.length > 0) {
+        setFreteResult(res)
+        setSelectedFrete(prev => {
+          if (!prev) return res.opcoes[0]
+          const existing = res.opcoes.find(o => o.tipo === prev.tipo)
+          return existing || res.opcoes[0]
+        })
+      } else {
+        setFreteResult(null)
+      }
+    } catch {
+      setFreteResult(null)
+    } finally {
+      setIsFreteLoading(false)
+    }
+  }
+
   // Pré-calcula opções de frete automaticamente se já tiver CEP válido preenchido
   useEffect(() => {
     const clean = (cliente.cep || '').replace(/\D/g, '')
-    if (clean.length === 8 && !freteResult) {
-      const freteRes = calcularFrete(clean, finalCartWeight, cartTotal)
-      if (!freteRes.error) {
-        setFreteResult(freteRes)
-        setSelectedFrete(freteRes.opcoes[0])
-      }
+    if (clean.length === 8 && !freteResult && !isFreteLoading) {
+      fetchFrete(clean)
     }
-  }, [cliente.cep, cartTotal, finalCartWeight, freteResult])
+  }, [cliente.cep, cartTotal, finalCartWeight])
 
   if (!showCheckout) return null
 
@@ -111,12 +134,8 @@ export default function CheckoutModal() {
           message: `Endereço localizado: ${res.logradouro ? res.logradouro + ' — ' : ''}${res.bairro ? res.bairro + ', ' : ''}${res.cidade}/${res.estado}`
         })
 
-        // Auto-calcular opções de frete com peso acumulado real
-        const freteRes = calcularFrete(clean, finalCartWeight, cartTotal)
-        if (!freteRes.error) {
-          setFreteResult(freteRes)
-          setSelectedFrete(freteRes.opcoes[0])
-        }
+        // Auto-calcular opções de frete oficial
+        fetchFrete(clean)
       } else {
         setCepFeedback({
           type: 'error',
@@ -130,11 +149,7 @@ export default function CheckoutModal() {
 
   const handleManualCalcFrete = () => {
     const clean = (cliente.cep || '').replace(/\D/g, '')
-    const result = calcularFrete(clean, finalCartWeight, cartTotal)
-    if (!result.error) {
-      setFreteResult(result)
-      setSelectedFrete(result.opcoes[0])
-    }
+    fetchFrete(clean)
   }
 
   const fretePrice = selectedFrete?.preco || 0
@@ -142,7 +157,30 @@ export default function CheckoutModal() {
   const pixDiscount = total * 0.03
   const pixTotal = total - pixDiscount
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
+    if (!selectedFrete) {
+      showToast('Por favor, selecione uma opção de frete dos Correios.', 'error')
+      return
+    }
+
+    const cleanCep = (cliente.cep || '').replace(/\D/g, '')
+    setIsValidatingOrder(true)
+
+    // Validação de segurança anti-fraude no backend (Section 11)
+    const validation = await validarFreteNoBackend({
+      cepDestino: cleanCep,
+      items: cart,
+      selectedServiceId: selectedFrete.tipo,
+      claimedShippingPrice: selectedFrete.preco
+    })
+    setIsValidatingOrder(false)
+
+    if (!validation.valid) {
+      showToast(validation.error || 'Divergência detectada no cálculo de frete. O frete foi atualizado.', 'error')
+      fetchFrete(cleanCep)
+      return
+    }
+
     const fullAddress = [
       cliente.endereco,
       cliente.numero ? `Nº ${cliente.numero}` : '',
@@ -152,13 +190,15 @@ export default function CheckoutModal() {
       `CEP: ${cliente.cep}`
     ].filter(Boolean).join(', ')
 
-    const finalTotal = paymentMethod === 'pix' ? pixTotal : total
-    const appliedPixDiscount = paymentMethod === 'pix' ? pixDiscount : 0
+    const validatedFrete = validation.realShippingPrice !== undefined ? validation.realShippingPrice : fretePrice
+    const calculatedTotal = cartTotal + validatedFrete
+    const appliedPixDiscount = paymentMethod === 'pix' ? (calculatedTotal * 0.03) : 0
+    const finalTotal = paymentMethod === 'pix' ? (calculatedTotal - appliedPixDiscount) : calculatedTotal
 
     const pedido = {
       items: cart,
       subtotal: cartTotal,
-      frete: fretePrice,
+      frete: validatedFrete,
       freteType: selectedFrete?.tipo,
       pixDiscount: appliedPixDiscount,
       total: finalTotal,
@@ -411,19 +451,37 @@ export default function CheckoutModal() {
                 Destino: <strong>{cliente.cidade}/{cliente.estado}</strong> (CEP: {cliente.cep}) · 📦 Remessa: <strong>{finalCartWeight.toFixed(1)} kg</strong> ({cart.reduce((a, b) => a + (b.qty || 1), 0)} {cart.reduce((a, b) => a + (b.qty || 1), 0) > 1 ? 'itens' : 'item'})
               </p>
 
-              {freteResult && freteResult.opcoes.map(op => (
-                <div
-                  key={op.tipo}
-                  className={`ck-frete-option ${selectedFrete?.tipo === op.tipo ? 'selected' : ''}`}
-                  onClick={() => setSelectedFrete(op)}
-                >
-                  <div>
-                    <strong>{op.tipo}</strong>
-                    <span>Prazo estimado: {op.prazoLabel}</span>
-                  </div>
-                  <span className="ck-frete-price">{op.label}</span>
+              {isFreteLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '36px 16px', gap: '12px', background: 'var(--dark-50)', borderRadius: '12px', marginBottom: 'var(--space-4)' }}>
+                  <Loader2 className="spinner" size={32} style={{ animation: 'spin 1s linear infinite', color: '#16a34a' }} />
+                  <span style={{ fontWeight: 600, color: 'var(--dark-700)', fontSize: '0.95rem' }}>Calculando frete dos Correios...</span>
                 </div>
-              ))}
+              ) : freteResult && freteResult.opcoes && freteResult.opcoes.length > 0 ? (
+                freteResult.opcoes.map(op => (
+                  <div
+                    key={op.tipo}
+                    className={`ck-frete-option ${selectedFrete?.tipo === op.tipo ? 'selected' : ''}`}
+                    onClick={() => setSelectedFrete(op)}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <strong>{op.tipo}</strong>
+                        {op.serviceCode && (
+                          <span style={{ fontSize: '10px', background: 'var(--dark-200)', padding: '1px 6px', borderRadius: '4px', color: 'var(--dark-600)' }}>
+                            {op.serviceCode}
+                          </span>
+                        )}
+                      </div>
+                      <span>{op.prazoLabel}</span>
+                    </div>
+                    <span className="ck-frete-price">{op.label}</span>
+                  </div>
+                ))
+              ) : (
+                <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', marginBottom: '16px' }}>
+                  <p style={{ margin: 0, fontSize: '0.88rem' }}>Não foi possível calcular o frete para este CEP no momento. Verifique os dados informados.</p>
+                </div>
+              )}
 
               <div className="ck-total-preview">
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -440,7 +498,7 @@ export default function CheckoutModal() {
                 </div>
               </div>
 
-              <button className="btn btn-primary btn-lg ck-next" onClick={() => setStep(3)}>
+              <button className="btn btn-primary btn-lg ck-next" onClick={() => setStep(3)} disabled={isFreteLoading || !selectedFrete}>
                 Escolher Forma de Pagamento
               </button>
             </div>
@@ -473,8 +531,15 @@ export default function CheckoutModal() {
                   <span className="ck-payment-price">R$ {total.toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
-              <button className="btn btn-primary btn-lg ck-next" onClick={handleFinalize} disabled={!paymentMethod}>
-                Finalizar Pedido — R$ {(paymentMethod === 'pix' ? pixTotal : total).toFixed(2).replace('.', ',')}
+              <button className="btn btn-primary btn-lg ck-next" onClick={handleFinalize} disabled={!paymentMethod || isValidatingOrder}>
+                {isValidatingOrder ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    <Loader2 className="spinner" size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                    Validando com os Correios...
+                  </span>
+                ) : (
+                  `Finalizar Pedido — R$ ${(paymentMethod === 'pix' ? pixTotal : total).toFixed(2).replace('.', ',')}`
+                )}
               </button>
             </div>
           )}

@@ -1,5 +1,6 @@
 // Catálogo inicial de demonstração — Infodesk Store
 // Cada produto possui fotos placeholder de alta qualidade via picsum/unsplash
+// Padronizado com dimensões físicas oficiais para cotação nos Correios (peso em gramas e dimensões em cm)
 
 const initialProducts = [
   {
@@ -34,6 +35,10 @@ const initialProducts = [
     sold: 1250,
     featured: true,
     ean: '7891234567890',
+    weight: 4500, // gramas
+    length: 65,   // cm
+    width: 45,    // cm
+    height: 18    // cm
   },
   {
     id: 'prod-002',
@@ -66,6 +71,10 @@ const initialProducts = [
     sold: 890,
     featured: true,
     ean: '7891234567891',
+    weight: 850,
+    length: 35,
+    width: 15,
+    height: 5
   },
   {
     id: 'prod-003',
@@ -99,6 +108,10 @@ const initialProducts = [
     sold: 3400,
     featured: true,
     ean: '7891234567892',
+    weight: 250,
+    length: 18,
+    width: 12,
+    height: 6
   },
   {
     id: 'prod-004',
@@ -131,6 +144,10 @@ const initialProducts = [
     sold: 2100,
     featured: false,
     ean: '7891234567893',
+    weight: 120,
+    length: 15,
+    width: 10,
+    height: 3
   },
   {
     id: 'prod-005',
@@ -163,6 +180,10 @@ const initialProducts = [
     sold: 1800,
     featured: true,
     ean: '7891234567894',
+    weight: 550,
+    length: 24,
+    width: 22,
+    height: 11
   },
   {
     id: 'prod-006',
@@ -196,6 +217,10 @@ const initialProducts = [
     sold: 340,
     featured: true,
     ean: '7891234567895',
+    weight: 3200,
+    length: 42,
+    width: 30,
+    height: 7
   },
   {
     id: 'prod-007',
@@ -227,6 +252,10 @@ const initialProducts = [
     sold: 720,
     featured: false,
     ean: '7891234567896',
+    weight: 380,
+    length: 16,
+    width: 12,
+    height: 8
   },
   {
     id: 'prod-008',
@@ -258,6 +287,10 @@ const initialProducts = [
     sold: 450,
     featured: false,
     ean: '7891234567897',
+    weight: 950,
+    length: 28,
+    width: 22,
+    height: 9
   },
   {
     id: 'prod-009',
@@ -289,6 +322,10 @@ const initialProducts = [
     sold: 1650,
     featured: false,
     ean: '7891234567898',
+    weight: 150,
+    length: 16,
+    width: 10,
+    height: 3
   },
   {
     id: 'prod-010',
@@ -321,6 +358,10 @@ const initialProducts = [
     sold: 180,
     featured: true,
     ean: '7891234567899',
+    weight: 1800,
+    length: 38,
+    width: 24,
+    height: 10
   },
   {
     id: 'prod-021',
@@ -351,6 +392,10 @@ const initialProducts = [
     sold: 520,
     featured: true,
     ean: '7891234567901',
+    weight: 16000,
+    length: 70,
+    width: 65,
+    height: 35
   },
   {
     id: 'prod-022',
@@ -381,6 +426,10 @@ const initialProducts = [
     sold: 340,
     featured: true,
     ean: '7891234567902',
+    weight: 2200,
+    length: 32,
+    width: 24,
+    height: 12
   },
   {
     id: 'prod-023',
@@ -411,6 +460,10 @@ const initialProducts = [
     sold: 210,
     featured: false,
     ean: '7891234567903',
+    weight: 2600,
+    length: 30,
+    width: 22,
+    height: 35
   },
   {
     id: 'prod-024',
@@ -441,6 +494,10 @@ const initialProducts = [
     sold: 670,
     featured: true,
     ean: '7891234567904',
+    weight: 220,
+    length: 16,
+    width: 10,
+    height: 5
   }
 ]
 

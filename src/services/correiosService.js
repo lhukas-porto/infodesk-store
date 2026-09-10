@@ -66,20 +66,118 @@ export async function consultarCep(cep) {
 // Estima peso unitário do produto com base no cadastro ou categoria/nome
 export function getProductWeight(product) {
   if (!product) return 0.5
-  if (product.weight && parseFloat(product.weight) > 0) return parseFloat(product.weight)
+  if (product.weight && parseFloat(product.weight) > 0) {
+    const w = parseFloat(product.weight)
+    return w > 50 ? Math.round((w / 1000) * 10) / 10 : w
+  }
+  if (product.weight_g && parseInt(product.weight_g, 10) > 0) {
+    return Math.round((parseInt(product.weight_g, 10) / 1000) * 10) / 10
+  }
   const cat = (product.category || '').toLowerCase()
   const name = (product.name || '').toLowerCase()
 
   if (name.includes('cadeira') || cat.includes('cadeira')) return 14.0
   if (name.includes('monitor') || cat.includes('monitor')) return 4.5
   if (name.includes('gabinete') || name.includes('computador') || name.includes('pc gamer')) return 7.5
-  if (name.includes('notebook')) return 2.2
-  if (name.includes('placa de vídeo') || name.includes('rtx') || name.includes('rx')) return 1.6
+  if (name.includes('notebook')) return 2.8
+  if (name.includes('placa de vídeo') || name.includes('rtx') || name.includes('rx')) return 1.8
   if (name.includes('teclado')) return 0.9
-  if (name.includes('parafusadeira') || name.includes('furadeira')) return 2.0
-  if (name.includes('cafeteira')) return 2.4
+  if (name.includes('parafusadeira') || name.includes('furadeira')) return 2.2
+  if (name.includes('cafeteira')) return 2.6
   if (name.includes('headset') || name.includes('fone')) return 0.6
   return 0.5 // periféricos pequenos, mouses, cabos, ssds
+}
+
+/**
+ * Cotação oficial de frete e prazo nos Correios via backend seguro (/api/shipping/quote)
+ * @param {string} cep - CEP do cliente
+ * @param {Array} items - Itens no carrinho [{ id, qty, ... }]
+ * @param {number} fallbackTotal - Valor total para fallback de contingência
+ */
+export async function cotarFreteOficial(cep, items = [], fallbackTotal = 0) {
+  const cleanCep = (cep || '').replace(/\D/g, '')
+  if (cleanCep.length !== 8) {
+    return { error: 'CEP inválido. Informe 8 dígitos.' }
+  }
+
+  const payload = {
+    cepDestino: cleanCep,
+    items: items.map(item => ({
+      productId: item.id,
+      quantity: item.qty || item.quantity || 1
+    }))
+  }
+
+  try {
+    const response = await fetch('/api/shipping/quote', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success && Array.isArray(data.options) && data.options.length > 0) {
+        return {
+          success: true,
+          cep: cleanCep,
+          isOficial: true,
+          opcoes: data.options.map(opt => ({
+            tipo: opt.name, // 'PAC' ou 'SEDEX'
+            serviceCode: opt.serviceCode,
+            preco: opt.price,
+            prazo: opt.deliveryDays,
+            label: `R$ ${opt.price.toFixed(2).replace('.', ',')}`,
+            prazoLabel: opt.deliveryDays === 1 ? 'Entrega em até 1 dia útil' : `Entrega em até ${opt.deliveryDays} dias úteis`,
+            dataMaxima: opt.maxDeliveryDate,
+            description: opt.description
+          })),
+          package: data.package
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Correios] Endpoint oficial inacessível. Acionando contingência local:', err.message)
+  }
+
+  // Fallback de contingência caso a API dos Correios ou conexão externa falhe
+  const totalKg = items.reduce((sum, i) => sum + (getProductWeight(i) * (i.qty || 1)), 0)
+  const contingencia = calcularFrete(cleanCep, totalKg, fallbackTotal)
+  return {
+    ...contingencia,
+    isOficial: false,
+    warning: 'Cotação estimada por contingência local.'
+  }
+}
+
+/**
+ * Validação de integridade do frete antes de registrar o pedido no checkout
+ */
+export async function validarFreteNoBackend({ cepDestino, items, selectedServiceId, claimedShippingPrice }) {
+  try {
+    const response = await fetch('/api/shipping/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cepDestino,
+        items: items.map(i => ({ productId: i.id, quantity: i.qty || i.quantity || 1 })),
+        selectedServiceId,
+        claimedShippingPrice
+      })
+    })
+
+    if (response.ok) {
+      return await response.json()
+    }
+    const errData = await response.json().catch(() => ({}))
+    return { valid: false, error: errData.error || 'Erro na validação do frete.' }
+  } catch {
+    // Se a rota falhar por estar em modo puramente estático, aprova com log
+    return { valid: true, warning: 'Validação ignorada em modo offline.' }
+  }
 }
 
 export function calcularFrete(cep, pesoKg = 0.5, valorTotal = 0) {
@@ -104,17 +202,19 @@ export function calcularFrete(cep, pesoKg = 0.5, valorTotal = 0) {
     opcoes: [
       {
         tipo: 'SEDEX',
+        serviceCode: '03220',
         preco: sedex,
         prazo: tabela.prazoSedex,
         label: `R$ ${sedex.toFixed(2).replace('.', ',')}`,
-        prazoLabel: `${tabela.prazoSedex} dia${tabela.prazoSedex > 1 ? 's' : ''} útei${tabela.prazoSedex > 1 ? 's' : 'l'}`,
+        prazoLabel: tabela.prazoSedex === 1 ? 'Entrega em até 1 dia útil' : `Entrega em até ${tabela.prazoSedex} dias úteis`,
       },
       {
         tipo: 'PAC',
+        serviceCode: '03298',
         preco: pac,
         prazo: tabela.prazoPac,
         label: `R$ ${pac.toFixed(2).replace('.', ',')}`,
-        prazoLabel: `${tabela.prazoPac} dias úteis`,
+        prazoLabel: tabela.prazoPac === 1 ? 'Entrega em até 1 dia útil' : `Entrega em até ${tabela.prazoPac} dias úteis`,
       },
     ],
   }

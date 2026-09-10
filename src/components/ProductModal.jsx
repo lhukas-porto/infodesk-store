@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap, MapPin } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
-import { calcularFrete, formatCep, getProductWeight } from '../services/correiosService'
+import { calcularFrete, cotarFreteOficial, formatCep, getProductWeight } from '../services/correiosService'
 
 export default function ProductModal() {
   const {
@@ -17,38 +17,44 @@ export default function ProductModal() {
   const [qty, setQty] = useState(1)
   const [cep, setCep] = useState(globalCep || '')
   const [frete, setFrete] = useState(null)
+  const [isCalculating, setIsCalculating] = useState(false)
   const [showSpecs, setShowSpecs] = useState(false)
 
   // Peso unitário e peso acumulado da quantidade selecionada
   const unitWeight = getProductWeight(product)
-  const totalWeight = Math.max(0.3, Math.round(unitWeight * qty * 10) / 10)
+  const totalWeight = Math.max(0.5, Math.round(unitWeight * qty * 10) / 10)
+
+  // Função assíncrona de cálculo de frete oficial
+  const handleCalcFrete = async (cepVal = cep) => {
+    const clean = (cepVal || '').replace(/\D/g, '')
+    if (clean.length === 8 && product) {
+      setIsCalculating(true)
+      try {
+        const result = await cotarFreteOficial(clean, [{ ...product, qty }], product.price * qty)
+        setFrete(result)
+      } finally {
+        setIsCalculating(false)
+      }
+    }
+  }
 
   // Auto-preenche e auto-calcula o frete caso haja um CEP global definido ou quantidade alterada
   useEffect(() => {
-    const activeCep = globalCep || cep
+    const activeCep = cep || globalCep || ''
     if (activeCep) {
       setCep(activeCep)
       const clean = activeCep.replace(/\D/g, '')
       if (clean.length === 8 && product) {
-        const result = calcularFrete(clean, totalWeight, (product.price || 0) * qty)
-        setFrete(result)
+        handleCalcFrete(clean)
       }
     }
-  }, [product, globalCep, qty, totalWeight])
+  }, [product, globalCep, qty])
 
   if (!product) return null
 
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0
-
-  const handleCalcFrete = (cepVal = cep) => {
-    const clean = cepVal.replace(/\D/g, '')
-    if (clean.length === 8) {
-      const result = calcularFrete(clean, totalWeight, product.price * qty)
-      setFrete(result)
-    }
-  }
 
   const handleCepInput = (val) => {
     const formatted = formatCep(val)
@@ -181,23 +187,37 @@ export default function ProductModal() {
                   onChange={e => handleCepInput(e.target.value)}
                   maxLength={9}
                 />
-                <button className="btn btn-outline btn-sm" onClick={() => handleCalcFrete(cep)}>
-                  {frete ? 'Recalcular' : 'Calcular'}
+                <button className="btn btn-outline btn-sm" onClick={() => handleCalcFrete(cep)} disabled={isCalculating}>
+                  {isCalculating ? 'Calculando...' : (frete ? 'Recalcular' : 'Calcular')}
                 </button>
               </div>
 
-              {frete && !frete.error && (
+              {isCalculating && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--dark-600)', padding: '8px 0' }}>
+                  <span className="spinner" style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid #16a34a', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  <span>Consultando frete dos Correios...</span>
+                </div>
+              )}
+
+              {!isCalculating && frete && !frete.error && (
                 <div className="pm-frete-results">
                   {frete.opcoes.map(op => (
                     <div key={op.tipo} className="pm-frete-option">
-                      <strong>{op.tipo}</strong>
+                      <div>
+                        <strong>{op.tipo}</strong>
+                        {op.serviceCode && (
+                          <span style={{ fontSize: '9px', background: 'var(--dark-200)', padding: '1px 4px', borderRadius: '3px', marginLeft: '6px', color: 'var(--dark-600)' }}>
+                            {op.serviceCode}
+                          </span>
+                        )}
+                      </div>
                       <span>{op.prazoLabel}</span>
                       <span className={op.preco === 0 ? 'pm-frete-free' : ''}>{op.label}</span>
                     </div>
                   ))}
                 </div>
               )}
-              {frete?.error && <p className="pm-frete-error">{frete.error}</p>}
+              {!isCalculating && frete?.error && <p className="pm-frete-error">{frete.error}</p>}
             </div>
 
             {/* Specs Toggle */}
