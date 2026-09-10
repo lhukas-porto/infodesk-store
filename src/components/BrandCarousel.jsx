@@ -1,26 +1,50 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useStore } from '../context/StoreContext'
-import { Award, ChevronRight } from 'lucide-react'
-
-const BRANDS = [
-  { name: 'Samsung', logo: 'SAMSUNG', badge: 'Smartphones & Telas' },
-  { name: 'Logitech', logo: 'LOGITECH', badge: 'Periféricos & Conectividade' },
-  { name: 'Tramontina', logo: 'TRAMONTINA', badge: 'Casa & Utilidades' },
-  { name: 'ASUS', logo: 'ASUS', badge: 'Tecnologia & Hardware' },
-  { name: 'Bosch', logo: 'BOSCH', badge: 'Ferramentas & Soluções' },
-  { name: 'Philips', logo: 'PHILIPS', badge: 'Eletro & Cuidados' },
-  { name: 'Kingston', logo: 'KINGSTON', badge: 'Memórias & Armazenamento' },
-  { name: '3M', logo: '3M', badge: 'Escritório & Suprimentos' }
-]
+import { Award, ChevronRight, CheckCircle2 } from 'lucide-react'
 
 export default function BrandCarousel() {
-  const { setSearchQuery } = useStore()
+  const { products, setSearchQuery, searchQuery } = useStore()
+
+  // Extrai dinamicamente apenas as marcas que possuem produtos com estoque ativo (> 0)
+  const availableBrands = useMemo(() => {
+    if (!Array.isArray(products)) return []
+
+    const map = new Map()
+
+    products.forEach(p => {
+      const brandName = (p.brand || '').trim()
+      const stock = parseInt(p.stock, 10) || 0
+
+      if (brandName && stock > 0) {
+        if (!map.has(brandName.toLowerCase())) {
+          map.set(brandName.toLowerCase(), {
+            name: brandName,
+            count: 1,
+            sampleCategory: p.category || 'Disponível'
+          })
+        } else {
+          map.get(brandName.toLowerCase()).count += 1
+        }
+      }
+    })
+
+    // Ordena pelas marcas com maior variedade de produtos em estoque
+    return Array.from(map.values()).sort((a, b) => b.count - a.count)
+  }, [products])
+
+  if (availableBrands.length === 0) {
+    return null
+  }
 
   const handleBrandClick = (brandName) => {
-    setSearchQuery(brandName)
-    const element = document.getElementById('products')
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' })
+    if (searchQuery.toLowerCase() === brandName.toLowerCase()) {
+      setSearchQuery('')
+    } else {
+      setSearchQuery(brandName)
+      const element = document.getElementById('products')
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' })
+      }
     }
   }
 
@@ -30,26 +54,34 @@ export default function BrandCarousel() {
         <div className="brands-header">
           <div className="brands-title-wrap">
             <Award size={20} className="brands-header-icon" />
-            <h3>Grandes Marcas que Você Confia</h3>
+            <h3>Marcas Disponíveis em Estoque</h3>
           </div>
-          <span className="brands-sub">Variedade autêntica em múltiplos departamentos com garantia oficial</span>
+          <span className="brands-sub">
+            <CheckCircle2 size={13} style={{ color: '#4ade80', display: 'inline', marginRight: 4 }} />
+            Produtos originais a pronta entrega com envio imediato
+          </span>
         </div>
 
         <div className="brands-grid">
-          {BRANDS.map((b) => (
-            <button
-              key={b.name}
-              className="brand-pill"
-              onClick={() => handleBrandClick(b.name)}
-              title={`Ver todos os produtos ${b.name}`}
-            >
-              <div className="brand-pill-top">
-                <span className="brand-logo-text">{b.logo}</span>
-                <ChevronRight size={14} className="brand-arrow" />
-              </div>
-              <span className="brand-badge-tag">{b.badge}</span>
-            </button>
-          ))}
+          {availableBrands.map((b) => {
+            const isSelected = searchQuery.toLowerCase() === b.name.toLowerCase()
+            return (
+              <button
+                key={b.name}
+                className={`brand-pill ${isSelected ? 'selected' : ''}`}
+                onClick={() => handleBrandClick(b.name)}
+                title={`Ver ${b.count} produto(s) da marca ${b.name}`}
+              >
+                <div className="brand-pill-top">
+                  <span className="brand-logo-text">{b.name.toUpperCase()}</span>
+                  <ChevronRight size={14} className="brand-arrow" />
+                </div>
+                <span className="brand-badge-tag">
+                  {b.count} {b.count === 1 ? 'produto' : 'produtos'} em estoque
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -89,6 +121,8 @@ export default function BrandCarousel() {
         .brands-sub {
           font-size: 13px;
           color: #94a3b8;
+          display: flex;
+          align-items: center;
         }
         .brands-grid {
           display: grid;
@@ -97,12 +131,17 @@ export default function BrandCarousel() {
         }
         @media (min-width: 640px) {
           .brands-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+        @media (min-width: 768px) {
+          .brands-grid {
             grid-template-columns: repeat(4, 1fr);
           }
         }
         @media (min-width: 1024px) {
           .brands-grid {
-            grid-template-columns: repeat(8, 1fr);
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 12px;
           }
         }
@@ -126,6 +165,11 @@ export default function BrandCarousel() {
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
         }
+        .brand-pill.selected {
+          background: rgba(37, 99, 235, 0.25);
+          border-color: #38bdf8;
+          box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3);
+        }
         .brand-pill-top {
           display: flex;
           align-items: center;
@@ -148,7 +192,7 @@ export default function BrandCarousel() {
           transform: translateX(3px);
         }
         .brand-badge-tag {
-          font-size: 10px;
+          font-size: 11px;
           color: #94a3b8;
           font-weight: 500;
           white-space: nowrap;
