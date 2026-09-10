@@ -1,8 +1,49 @@
 // Configurações e definições das APIs Oficiais dos Correios (Multiempresa / Multi-Store)
 // Mantém as credenciais seguras exclusivamente no ambiente Node.js / Serverless
+import fs from 'node:fs'
+import path from 'node:path'
+
+const CONFIG_FILE_PATH = path.resolve(process.cwd(), 'server/correios/.correios_config.json')
 
 // Mapa em memória de configurações por empresa/loja (store_id)
 const storeConfigs = new Map()
+
+// Carrega configurações persistidas do disco na inicialização
+function loadPersistedConfigs() {
+  try {
+    if (fs.existsSync(CONFIG_FILE_PATH)) {
+      const raw = fs.readFileSync(CONFIG_FILE_PATH, 'utf-8')
+      if (raw.trim()) {
+        const parsed = JSON.parse(raw)
+        for (const [key, val] of Object.entries(parsed)) {
+          storeConfigs.set(key, val)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Correios Config] Aviso ao ler arquivo de configuração local:', err.message)
+  }
+}
+
+// Salva configurações no disco
+function persistConfigs() {
+  try {
+    const obj = {}
+    for (const [key, val] of storeConfigs.entries()) {
+      obj[key] = val
+    }
+    const dir = path.dirname(CONFIG_FILE_PATH)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(obj, null, 2), 'utf-8')
+  } catch (err) {
+    console.warn('[Correios Config] Aviso ao persistir arquivo de configuração local:', err.message)
+  }
+}
+
+// Inicializa lendo do disco
+loadPersistedConfigs()
 
 export const CORREIOS_SERVICES = [
   {
@@ -33,6 +74,9 @@ export function maskSecret(secret) {
  * @returns {object}
  */
 export function getStoreCorreiosConfig(storeId = 'default') {
+  if (storeConfigs.size === 0) {
+    loadPersistedConfigs()
+  }
   const custom = storeConfigs.get(storeId) || {}
 
   return {
@@ -74,6 +118,7 @@ export function setStoreCorreiosConfig(storeId = 'default', updates = {}) {
   }
 
   storeConfigs.set(storeId, merged)
+  persistConfigs()
   return merged
 }
 

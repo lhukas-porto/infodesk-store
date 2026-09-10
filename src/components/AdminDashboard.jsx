@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   X, Package, DollarSign, ShoppingCart, BarChart3, Plus,
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
@@ -24,7 +24,20 @@ export default function AdminDashboard() {
     globalTaxRate, updateGlobalTaxRate,
   } = useStore()
 
-  const [tab, setTab] = useState('overview')
+  const [tab, setTabState] = useState(() => {
+    try {
+      return localStorage.getItem('infodesk_admin_active_tab') || 'overview'
+    } catch {
+      return 'overview'
+    }
+  })
+
+  const setTab = useCallback((newTab) => {
+    setTabState(newTab)
+    try {
+      localStorage.setItem('infodesk_admin_active_tab', newTab)
+    } catch {}
+  }, [])
   const [editingProduct, setEditingProduct] = useState(null)
   const [labelProduct, setLabelProduct] = useState(null)
   const [productSearch, setProductSearch] = useState('')
@@ -60,48 +73,84 @@ export default function AdminDashboard() {
   const [passError, setPassError] = useState('')
   const [passSuccess, setPassSuccess] = useState('')
 
-  // Correios Multiempresa Settings State
-  const [correiosForm, setCorreiosForm] = useState({
-    storeId: 'default',
-    enabled: true,
-    usuario: '',
-    codigoAcesso: '',
-    contrato: '',
-    dr: '10',
-    cepOrigem: '70673-631',
-    pacEnabled: true,
-    sedexEnabled: true,
-    hasCodigoAcesso: false,
+  // Correios Multiempresa Settings State (com persistência híbrida: localStorage + Backend File)
+  const [correiosForm, setCorreiosForm] = useState(() => {
+    try {
+      const saved = localStorage.getItem('infodesk_correios_config')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          storeId: parsed.storeId || 'default',
+          enabled: parsed.enabled !== undefined ? parsed.enabled : true,
+          usuario: parsed.usuario || '',
+          codigoAcesso: parsed.codigoAcesso || '',
+          contrato: parsed.contrato || '',
+          dr: parsed.dr || '10',
+          cepOrigem: parsed.cepOrigem || '70673-631',
+          pacEnabled: parsed.pacEnabled !== undefined ? parsed.pacEnabled : true,
+          sedexEnabled: parsed.sedexEnabled !== undefined ? parsed.sedexEnabled : true,
+          hasCodigoAcesso: Boolean(parsed.hasCodigoAcesso || parsed.codigoAcesso)
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar configurações dos Correios do localStorage:', e)
+    }
+    return {
+      storeId: 'default',
+      enabled: true,
+      usuario: '',
+      codigoAcesso: '',
+      contrato: '',
+      dr: '10',
+      cepOrigem: '70673-631',
+      pacEnabled: true,
+      sedexEnabled: true,
+      hasCodigoAcesso: false,
+    }
   })
   const [showCodigoAcesso, setShowCodigoAcesso] = useState(false)
   const [isSavingCorreios, setIsSavingCorreios] = useState(false)
   const [isTestingCorreios, setIsTestingCorreios] = useState(false)
   const [testResults, setTestResults] = useState(null)
 
-  // Carrega configurações dos Correios ao abrir a aba
-  useEffect(() => {
-    if (tab === 'shipping') {
-      fetch(`/api/shipping/config?storeId=${correiosForm.storeId || 'default'}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            setCorreiosForm(prev => ({
+  // Carrega configurações persistidas dos Correios do backend (com cache-busting)
+  const syncCorreiosFromBackend = useCallback((storeIdToFetch = 'default') => {
+    fetch(`/api/shipping/config?storeId=${encodeURIComponent(storeIdToFetch)}&_t=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache' }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          setCorreiosForm(prev => {
+            const updated = {
               ...prev,
-              enabled: data.enabled !== undefined ? data.enabled : true,
-              usuario: data.usuario || '',
-              codigoAcesso: data.maskedCodigoAcesso || '',
-              contrato: data.contrato || '',
-              dr: data.dr || '10',
-              cepOrigem: data.cepOrigem ? formatCep(data.cepOrigem) : '70673-631',
-              pacEnabled: data.pacEnabled !== undefined ? data.pacEnabled : true,
-              sedexEnabled: data.sedexEnabled !== undefined ? data.sedexEnabled : true,
-              hasCodigoAcesso: data.hasCodigoAcesso
-            }))
-          }
-        })
-        .catch(err => console.warn('Erro ao carregar configurações dos Correios:', err))
-    }
-  }, [tab, correiosForm.storeId])
+              storeId: data.storeId || storeIdToFetch,
+              enabled: data.enabled !== undefined ? data.enabled : prev.enabled,
+              usuario: data.usuario || prev.usuario || '',
+              codigoAcesso: data.maskedCodigoAcesso || prev.codigoAcesso || '',
+              contrato: data.contrato || prev.contrato || '',
+              dr: data.dr || prev.dr || '10',
+              cepOrigem: data.cepOrigem ? formatCep(data.cepOrigem) : prev.cepOrigem || '70673-631',
+              pacEnabled: data.pacEnabled !== undefined ? data.pacEnabled : prev.pacEnabled,
+              sedexEnabled: data.sedexEnabled !== undefined ? data.sedexEnabled : prev.sedexEnabled,
+              hasCodigoAcesso: data.hasCodigoAcesso ?? Boolean(prev.hasCodigoAcesso || prev.codigoAcesso)
+            }
+            try {
+              localStorage.setItem('infodesk_correios_config', JSON.stringify(updated))
+            } catch (e) {
+              console.warn('Erro ao salvar no localStorage:', e)
+            }
+            return updated
+          })
+        }
+      })
+      .catch(err => console.warn('Erro ao carregar configurações dos Correios do backend:', err))
+  }, [])
+
+  // Sincroniza ao abrir o painel e ao selecionar a aba de frete
+  useEffect(() => {
+    syncCorreiosFromBackend(correiosForm.storeId || 'default')
+  }, [tab, correiosForm.storeId, syncCorreiosFromBackend])
 
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
@@ -115,11 +164,23 @@ export default function AdminDashboard() {
       const data = await res.json()
       if (data.success) {
         showToast('Configurações dos Correios salvas com sucesso! 🚚✅')
-        setCorreiosForm(prev => ({
-          ...prev,
-          codigoAcesso: data.maskedCodigoAcesso || prev.codigoAcesso,
-          hasCodigoAcesso: data.hasCodigoAcesso
-        }))
+        const updated = {
+          ...correiosForm,
+          usuario: data.usuario || correiosForm.usuario,
+          codigoAcesso: data.maskedCodigoAcesso || correiosForm.codigoAcesso,
+          contrato: data.contrato || correiosForm.contrato,
+          dr: data.dr || correiosForm.dr,
+          cepOrigem: data.cepOrigem ? formatCep(data.cepOrigem) : correiosForm.cepOrigem,
+          pacEnabled: data.pacEnabled !== undefined ? data.pacEnabled : correiosForm.pacEnabled,
+          sedexEnabled: data.sedexEnabled !== undefined ? data.sedexEnabled : correiosForm.sedexEnabled,
+          hasCodigoAcesso: data.hasCodigoAcesso ?? Boolean(correiosForm.codigoAcesso)
+        }
+        setCorreiosForm(updated)
+        try {
+          localStorage.setItem('infodesk_correios_config', JSON.stringify(updated))
+        } catch (e) {
+          console.warn('Erro ao salvar no localStorage:', e)
+        }
       } else {
         showToast(data.error || 'Erro ao salvar configurações.', 'error')
       }

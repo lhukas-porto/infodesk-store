@@ -171,7 +171,26 @@ export function StoreProvider({ children }) {
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
-  const [showAdminDashboard, setShowAdminDashboard] = useState(false)
+  const [showAdminDashboard, setShowAdminDashboardState] = useState(() => {
+    try {
+      const savedAdminSession = localStorage.getItem('infodesk_admin_session')
+      const wasOpen = sessionStorage.getItem('infodesk_admin_dashboard_open') === 'true'
+      return Boolean(savedAdminSession && wasOpen)
+    } catch {
+      return false
+    }
+  })
+
+  const setShowAdminDashboard = useCallback((val) => {
+    setShowAdminDashboardState(val)
+    try {
+      if (val) {
+        sessionStorage.setItem('infodesk_admin_dashboard_open', 'true')
+      } else {
+        sessionStorage.removeItem('infodesk_admin_dashboard_open')
+      }
+    } catch {}
+  }, [])
   const [toast, setToast] = useState(null)
 
   // === Fase 3: Navegação Avançada, CEP Global & Filtros Facetados ===
