@@ -12,6 +12,8 @@ import CustomerAccountModal from './components/CustomerAccountModal'
 import AdminLoginModal from './components/AdminLoginModal'
 import AdminDashboard from './components/AdminDashboard'
 import BarcodeScannerModal from './components/BarcodeScannerModal'
+import TrustBar from './components/TrustBar'
+import BrandCarousel from './components/BrandCarousel'
 
 export default function App() {
   const {
@@ -50,6 +52,9 @@ export default function App() {
             </div>
           </div>
         </section>
+        
+        {/* Barra de Confiança & Benefícios (Pilar 1) */}
+        <TrustBar />
 
         {/* Featured Products */}
         {featuredProducts.length > 0 && (
@@ -69,6 +74,9 @@ export default function App() {
             </div>
           </section>
         )}
+
+        {/* Carrossel de Marcas Oficiais da Informática */}
+        <BrandCarousel />
 
         {/* Category Filter + Product Grid */}
         <section id="products" className="section-products">

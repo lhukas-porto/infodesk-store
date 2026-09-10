@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Search, ShoppingCart, User, Menu, X, Shield } from 'lucide-react'
+import { Search, ShoppingCart, User, Menu, X, Shield, Zap, Truck, CreditCard, ShieldCheck } from 'lucide-react'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
 
@@ -15,6 +15,36 @@ export default function Header() {
 
   return (
     <header className="header">
+      {/* Top Trust Bar */}
+      <div className="header-topbar">
+        <div className="container header-topbar-inner">
+          <div className="topbar-items">
+            <span className="topbar-item highlight">
+              <Zap size={13} className="topbar-icon" />
+              <strong>10% OFF</strong> no Pix à vista
+            </span>
+            <span className="topbar-sep hide-mobile">•</span>
+            <span className="topbar-item hide-mobile">
+              <Truck size={13} className="topbar-icon" />
+              Envio em até 24h via Correios
+            </span>
+            <span className="topbar-sep hide-mobile">•</span>
+            <span className="topbar-item hide-mobile">
+              <CreditCard size={13} className="topbar-icon" />
+              Até 12x no Cartão
+            </span>
+            <span className="topbar-sep hide-mobile">•</span>
+            <span className="topbar-item">
+              <ShieldCheck size={13} className="topbar-icon" />
+              Garantia Oficial com NF
+            </span>
+          </div>
+          <div className="topbar-right hide-mobile">
+            <span>Suporte Especializado: <strong>contato@infodesk.net.br</strong></span>
+          </div>
+        </div>
+      </div>
+
       <div className="header-inner container">
         {/* Logo */}
         <div className="header-logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
@@ -109,6 +139,50 @@ export default function Header() {
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           border-bottom: 1px solid var(--dark-100);
+        }
+        .header-topbar {
+          background: #090e1a;
+          color: #94a3b8;
+          font-size: 11.5px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          padding: 6px 0;
+        }
+        .header-topbar-inner {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .topbar-items {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .topbar-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          color: #cbd5e1;
+        }
+        .topbar-item.highlight {
+          color: #38bdf8;
+        }
+        .topbar-item.highlight strong {
+          color: #4ade80;
+        }
+        .topbar-icon {
+          flex-shrink: 0;
+        }
+        .topbar-sep {
+          color: #475569;
+          font-size: 10px;
+        }
+        .topbar-right {
+          color: #94a3b8;
+          font-size: 11px;
+        }
+        .topbar-right strong {
+          color: #e2e8f0;
         }
         .header-inner {
           display: flex;

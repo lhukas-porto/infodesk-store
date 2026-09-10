@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ShoppingCart, Star, Eye, Heart } from 'lucide-react'
+import { ShoppingCart, Star, Eye, Heart, Zap, Flame, Truck } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 
 export default function ProductCard({ product }) {
@@ -11,6 +11,9 @@ export default function ProductCard({ product }) {
   const originalPrice = parseFloat(product.originalPrice) || 0
   const installments = parseInt(product.installments) || 10
   const installmentPrice = parseFloat(product.installmentPrice) || (price > 0 ? price / installments : 0)
+
+  // 10% de desconto real à vista no Pix (KaBuM! / Magalu pattern)
+  const pixPrice = price * 0.90
 
   const discount = (originalPrice > price && originalPrice > 0)
     ? Math.round(((originalPrice - price) / originalPrice) * 100)
@@ -33,22 +36,27 @@ export default function ProductCard({ product }) {
           loading="lazy"
         />
 
-        {/* Badges */}
+        {/* Badges de Alta Conversão */}
         <div className="product-card-badges">
           {discount > 0 && (
-            <span className="badge badge-red">-{discount}%</span>
+            <span className="badge badge-red">-{discount}% OFF</span>
           )}
           {product.stock <= 5 && product.stock > 0 && (
-            <span className="badge badge-amber">Últimas {product.stock} un.</span>
+            <span className="badge badge-urgent">
+              <Flame size={12} className="badge-flame-icon" /> Restam {product.stock} un!
+            </span>
+          )}
+          {product.featured && (
+            <span className="badge badge-featured">Destaque</span>
           )}
         </div>
 
         {/* Quick Actions (hover) */}
         <div className={`product-card-actions ${hovered ? 'visible' : ''}`}>
-          <button className="product-card-action-btn" onClick={e => { e.stopPropagation(); setSelectedProduct(product) }}>
+          <button className="product-card-action-btn" onClick={e => { e.stopPropagation(); setSelectedProduct(product) }} title="Ver detalhes rápidos">
             <Eye size={18} />
           </button>
-          <button className="product-card-action-btn" onClick={e => e.stopPropagation()}>
+          <button className="product-card-action-btn" onClick={e => e.stopPropagation()} title="Salvar nos favoritos">
             <Heart size={18} />
           </button>
         </div>
@@ -56,8 +64,14 @@ export default function ProductCard({ product }) {
 
       {/* Info */}
       <div className="product-card-body">
-        <span className="product-card-brand">{product.brand}</span>
-        <h3 className="product-card-name" onClick={() => setSelectedProduct(product)}>
+        <div className="product-card-header-row">
+          <span className="product-card-brand">{product.brand}</span>
+          <span className="product-card-shipping-tag">
+            <Truck size={11} /> Envio 24h
+          </span>
+        </div>
+
+        <h3 className="product-card-name" onClick={() => setSelectedProduct(product)} title={product.name}>
           {product.name}
         </h3>
 
@@ -65,23 +79,30 @@ export default function ProductCard({ product }) {
         <div className="product-card-rating">
           <div className="stars">
             {[...Array(5)].map((_, i) => (
-              <Star key={i} size={14} fill={i < Math.round(product.rating || 5) ? '#F59E0B' : 'none'} />
+              <Star key={i} size={13} fill={i < Math.round(product.rating || 5) ? '#F59E0B' : 'none'} stroke="#F59E0B" />
             ))}
           </div>
           <span className="product-card-reviews">({product.reviews || 0})</span>
         </div>
 
-        {/* Price */}
+        {/* Dual-Price de Alta Conversão (Mercado Livre + KaBuM!) */}
         <div className="product-card-pricing">
           {originalPrice > price && (
-            <span className="price-old">R$ {originalPrice.toFixed(2).replace('.', ',')}</span>
+            <span className="price-old">De R$ {originalPrice.toFixed(2).replace('.', ',')}</span>
           )}
-          <span className="price-current">R$ {price.toFixed(2).replace('.', ',')}</span>
-          {installments > 1 && (
-            <span className="price-installment">
-              ou {installments}x de R$ {installmentPrice.toFixed(2).replace('.', ',')}
+
+          {/* Preço Principal no Pix */}
+          <div className="price-pix-row">
+            <span className="price-pix-val">R$ {pixPrice.toFixed(2).replace('.', ',')}</span>
+            <span className="badge-pix-discount">
+              <Zap size={11} /> 10% NO PIX
             </span>
-          )}
+          </div>
+
+          {/* Preço Parcelado */}
+          <span className="price-installment">
+            ou <strong>R$ {price.toFixed(2).replace('.', ',')}</strong> em até {installments}x de R$ {installmentPrice.toFixed(2).replace('.', ',')} s/ juros
+          </span>
         </div>
 
         {/* CTA */}
@@ -90,7 +111,7 @@ export default function ProductCard({ product }) {
           onClick={() => addToCart(product)}
         >
           <ShoppingCart size={16} />
-          Adicionar
+          Adicionar ao Carrinho
         </button>
       </div>
 
@@ -174,6 +195,40 @@ export default function ProductCard({ product }) {
           gap: var(--space-2);
           flex: 1;
         }
+        .badge-urgent {
+          background: linear-gradient(135deg, #ef4444, #f97316);
+          color: #ffffff;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          animation: pulseUrgent 2s infinite ease-in-out;
+        }
+        @keyframes pulseUrgent {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.9; transform: scale(1.03); }
+        }
+        .badge-featured {
+          background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+          color: #ffffff;
+          font-weight: 600;
+        }
+        .product-card-header-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .product-card-shipping-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #0284c7;
+          background: rgba(2, 132, 199, 0.08);
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
         .product-card-brand {
           font-size: var(--text-xs);
           font-weight: 600;
@@ -193,6 +248,7 @@ export default function ProductCard({ product }) {
           -webkit-box-orient: vertical;
           overflow: hidden;
           transition: color var(--transition-fast);
+          min-height: 38px;
         }
         .product-card-name:hover { color: var(--lime-dark); }
         .product-card-rating {
@@ -207,12 +263,51 @@ export default function ProductCard({ product }) {
         .product-card-pricing {
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 3px;
           margin-top: auto;
+          padding-top: var(--space-2);
+          border-top: 1px dashed var(--dark-100);
+        }
+        .price-old {
+          font-size: 12px;
+          color: var(--dark-400);
+          text-decoration: line-through;
+        }
+        .price-pix-row {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .price-pix-val {
+          font-size: 20px;
+          font-weight: 800;
+          color: #15803d;
+          letter-spacing: -0.02em;
+        }
+        .badge-pix-discount {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          font-size: 10px;
+          font-weight: 800;
+          background: #dcfce7;
+          color: #166534;
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
+        .price-installment {
+          font-size: 12px;
+          color: var(--dark-500);
+          line-height: 1.3;
+        }
+        .price-installment strong {
+          color: var(--dark-700);
         }
         .product-card-cta {
-          margin-top: var(--space-2);
+          margin-top: var(--space-3);
           width: 100%;
+          font-weight: 600;
         }
       `}</style>
     </div>
