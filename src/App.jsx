@@ -14,6 +14,8 @@ import AdminDashboard from './components/AdminDashboard'
 import BarcodeScannerModal from './components/BarcodeScannerModal'
 import TrustBar from './components/TrustBar'
 import BrandCarousel from './components/BrandCarousel'
+import ProductSortFilter from './components/ProductSortFilter'
+import CepModal from './components/CepModal'
 
 export default function App() {
   const {
@@ -99,16 +101,19 @@ export default function App() {
               ))}
             </div>
 
+            {/* Barra de Ordenação e Filtros Facetados (Fase 3) */}
+            <ProductSortFilter />
+
             {/* Grid */}
             {filteredProducts.length > 0 ? (
-              <div className="product-grid" style={{ marginTop: 'var(--space-6)' }}>
+              <div className="product-grid" style={{ marginTop: 'var(--space-2)' }}>
                 {filteredProducts.map(product => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
             ) : (
               <div className="empty-state">
-                <p>Nenhum produto encontrado nesta categoria.</p>
+                <p>Nenhum produto encontrado nesta categoria ou faixa de preço.</p>
               </div>
             )}
           </div>
@@ -125,6 +130,7 @@ export default function App() {
       <AdminLoginModal />
       <AdminDashboard />
       <BarcodeScannerModal />
+      <CepModal />
 
       {/* Toast */}
       {toast && (

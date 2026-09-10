@@ -174,6 +174,22 @@ export function StoreProvider({ children }) {
   const [showAdminDashboard, setShowAdminDashboard] = useState(false)
   const [toast, setToast] = useState(null)
 
+  // === Fase 3: Navegação Avançada, CEP Global & Filtros Facetados ===
+  const [globalCep, setGlobalCep] = useState(() => {
+    return localStorage.getItem('infodesk_global_cep') || ''
+  })
+  const [globalAddress, setGlobalAddress] = useState(() => {
+    try {
+      const saved = localStorage.getItem('infodesk_global_address')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+  const [showCepModal, setShowCepModal] = useState(false)
+  const [sortBy, setSortBy] = useState('relevance') // 'relevance' | 'price_asc' | 'price_desc' | 'sold' | 'rating'
+  const [priceFilter, setPriceFilter] = useState('all') // 'all' | 'under300' | '300to1000' | '1000to3000' | 'above3000'
+
   // === Persist ===
   useEffect(() => {
     localStorage.setItem('infodesk_products', JSON.stringify(products))
@@ -206,6 +222,22 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('infodesk_admin_config', JSON.stringify(adminConfig))
   }, [adminConfig])
+
+  useEffect(() => {
+    if (globalCep) {
+      localStorage.setItem('infodesk_global_cep', globalCep)
+    } else {
+      localStorage.removeItem('infodesk_global_cep')
+    }
+  }, [globalCep])
+
+  useEffect(() => {
+    if (globalAddress) {
+      localStorage.setItem('infodesk_global_address', JSON.stringify(globalAddress))
+    } else {
+      localStorage.removeItem('infodesk_global_address')
+    }
+  }, [globalAddress])
 
   // === Supabase Initial Hydration & Cloud Seed ===
   useEffect(() => {
@@ -619,9 +651,24 @@ export function StoreProvider({ children }) {
       (activeCategory === 'Casa & Utilidades' && ['Casa', 'Casa & Utilidades', 'Utilidades', 'Eletro'].includes(p.category)) ||
       (activeCategory === 'Ferramentas & Acessórios' && ['Ferramentas', 'Ferramentas & Acessórios', 'Acessórios'].includes(p.category))
 
+    const pPrice = parseFloat(p.price) || 0
+    let matchesPrice = true
+    if (priceFilter === 'under300') matchesPrice = pPrice <= 300
+    else if (priceFilter === '300to1000') matchesPrice = pPrice > 300 && pPrice <= 1000
+    else if (priceFilter === '1000to3000') matchesPrice = pPrice > 1000 && pPrice <= 3000
+    else if (priceFilter === 'above3000') matchesPrice = pPrice > 3000
+
     const inStock = p.stock > 0
 
-    return matchesSearch && matchesCategory && inStock
+    return matchesSearch && matchesCategory && matchesPrice && inStock
+  }).sort((a, b) => {
+    const priceA = parseFloat(a.price) || 0
+    const priceB = parseFloat(b.price) || 0
+    if (sortBy === 'price_asc') return priceA - priceB
+    if (sortBy === 'price_desc') return priceB - priceA
+    if (sortBy === 'sold') return (b.sold || 0) - (a.sold || 0)
+    if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0)
+    return 0 // relevance
   })
 
   const featuredProducts = products.filter(p => p.featured && p.stock > 0)
@@ -650,6 +697,12 @@ export function StoreProvider({ children }) {
     saveCustomerProfile,
     showCustomerAccount,
     setShowCustomerAccount,
+    // Fase 3: CEP Global & Filtros Facetados
+    globalCep, setGlobalCep,
+    globalAddress, setGlobalAddress,
+    showCepModal, setShowCepModal,
+    sortBy, setSortBy,
+    priceFilter, setPriceFilter,
     // UI State
     searchQuery, setSearchQuery,
     activeCategory, setActiveCategory,

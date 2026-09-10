@@ -1,17 +1,94 @@
-import React, { useState } from 'react'
-import { Search, ShoppingCart, User, Menu, X, Shield, Zap, Truck, CreditCard, ShieldCheck } from 'lucide-react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
+import {
+  Search,
+  ShoppingCart,
+  User,
+  Menu,
+  X,
+  Shield,
+  Zap,
+  Truck,
+  CreditCard,
+  ShieldCheck,
+  MapPin,
+  Flame,
+  ArrowRight,
+  PackageCheck
+} from 'lucide-react'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
 
+const TOP_SEARCH_TERMS = [
+  'Monitor Gamer',
+  'Cadeira Ergonomica',
+  'Teclado Mecanico',
+  'Parafusadeira',
+  'Samsung',
+  'Notebook',
+  'SSD Kingston',
+  'Cafeteira'
+]
+
 export default function Header() {
   const {
-    searchQuery, setSearchQuery,
-    cartCount, setCartOpen,
-    isAdmin, setShowAdminLogin, setShowAdminDashboard, logoutAdmin,
-    customerProfile, isCustomerLoggedIn, setShowCustomerAccount,
+    products,
+    searchQuery,
+    setSearchQuery,
+    cartCount,
+    setCartOpen,
+    isAdmin,
+    setShowAdminDashboard,
+    customerProfile,
+    isCustomerLoggedIn,
+    setShowCustomerAccount,
+    setSelectedProduct,
+    // Fase 3
+    globalCep,
+    globalAddress,
+    setShowCepModal,
   } = useStore()
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
+  const searchContainerRef = useRef(null)
+
+  // Extrai resultados preditivos em tempo real
+  const predictiveResults = useMemo(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) return []
+    const q = searchQuery.toLowerCase().trim()
+
+    return products.filter(p => {
+      const name = (p.name || '').toLowerCase()
+      const brand = (p.brand || '').toLowerCase()
+      const cat = (p.category || '').toLowerCase()
+      return name.includes(q) || brand.includes(q) || cat.includes(q)
+    }).slice(0, 5)
+  }, [products, searchQuery])
+
+  // Fecha o dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setSearchFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSelectPredictive = (prod) => {
+    setSelectedProduct(prod)
+    setSearchFocused(false)
+  }
+
+  const handleSelectTerm = (term) => {
+    setSearchQuery(term)
+    setSearchFocused(false)
+    const element = document.getElementById('products')
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
 
   return (
     <header className="header">
@@ -51,8 +128,24 @@ export default function Header() {
           <InfodeskLogo size={130} />
         </div>
 
-        {/* Search Bar - Desktop */}
-        <div className="header-search hide-mobile">
+        {/* Global CEP Button (Mercado Livre / Amazon Pattern) */}
+        <button
+          type="button"
+          className="header-cep-btn hide-mobile"
+          onClick={() => setShowCepModal(true)}
+          title="Definir endereço para cálculo de frete e prazos"
+        >
+          <MapPin size={20} className="header-cep-icon" />
+          <div className="header-cep-info">
+            <span className="header-cep-sub">Enviar para</span>
+            <strong className="header-cep-city">
+              {globalAddress?.cidade ? `${globalAddress.cidade}/${globalAddress.estado}` : 'Informe seu CEP'}
+            </strong>
+          </div>
+        </button>
+
+        {/* Search Bar - Desktop with Predictive Search */}
+        <div className="header-search hide-mobile" ref={searchContainerRef}>
           <Search size={18} className="header-search-icon" />
           <input
             type="text"
@@ -60,7 +153,95 @@ export default function Header() {
             placeholder="O que você procura hoje? Busque por produto, marca ou departamento..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') setSearchFocused(false)
+            }}
           />
+          {searchQuery && (
+            <button
+              type="button"
+              className="header-search-clear"
+              onClick={() => setSearchQuery('')}
+              title="Limpar busca"
+            >
+              <X size={14} />
+            </button>
+          )}
+
+          {/* Predictive Search Dropdown */}
+          {searchFocused && (
+            <div className="predictive-dropdown">
+              {predictiveResults.length > 0 ? (
+                <div className="predictive-results">
+                  <div className="predictive-header">
+                    <span>Produtos sugeridos ({predictiveResults.length})</span>
+                    <a href="#products" onClick={() => setSearchFocused(false)}>Ver todos os resultados</a>
+                  </div>
+
+                  {predictiveResults.map(p => {
+                    const pixPrice = (parseFloat(p.price) || 0) * 0.97
+                    return (
+                      <div
+                        key={p.id}
+                        className="predictive-item"
+                        onClick={() => handleSelectPredictive(p)}
+                      >
+                        <img
+                          src={p.images?.[0] || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=100&fit=crop'}
+                          alt={p.name}
+                          className="predictive-img"
+                        />
+                        <div className="predictive-info">
+                          <div className="predictive-brand-row">
+                            <span className="predictive-brand">{p.brand}</span>
+                            <span className="predictive-cat">• {p.category}</span>
+                          </div>
+                          <strong className="predictive-name">{p.name}</strong>
+                          <div className="predictive-price-row">
+                            <span className="predictive-price-pix">
+                              R$ {pixPrice.toFixed(2).replace('.', ',')} <small>no Pix (3% OFF)</small>
+                            </span>
+                            {p.stock > 0 ? (
+                              <span className="predictive-stock-ok">
+                                <PackageCheck size={12} /> Em estoque
+                              </span>
+                            ) : (
+                              <span className="predictive-stock-out">Indisponível</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : searchQuery.trim().length >= 2 ? (
+                <div className="predictive-empty">
+                  <p>Nenhum produto encontrado para "<strong>{searchQuery}</strong>".</p>
+                  <span>Tente buscar por termos mais genéricos ou marcas.</span>
+                </div>
+              ) : (
+                <div className="predictive-suggestions">
+                  <div className="predictive-suggestions-title">
+                    <Flame size={15} className="text-amber" />
+                    <span>Termos mais buscados</span>
+                  </div>
+                  <div className="predictive-tags">
+                    {TOP_SEARCH_TERMS.map(term => (
+                      <button
+                        key={term}
+                        type="button"
+                        className="predictive-tag-chip"
+                        onClick={() => handleSelectTerm(term)}
+                      >
+                        {term}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -80,7 +261,7 @@ export default function Header() {
             </span>
           </button>
 
-          {/* Admin Fast Button (Only visible if Admin is already authenticated) */}
+          {/* Admin Fast Button */}
           {isAdmin && (
             <button
               className="btn btn-ghost header-admin-btn"
@@ -114,9 +295,20 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile Search */}
-      <div className="header-mobile-search hide-desktop">
+      {/* Mobile Bar: CEP and Search */}
+      <div className="header-mobile-bar hide-desktop">
         <div className="container">
+          <button
+            type="button"
+            className="header-mobile-cep-btn"
+            onClick={() => setShowCepModal(true)}
+          >
+            <MapPin size={15} style={{ color: '#0284c7' }} />
+            <span>
+              Enviar para: <strong>{globalAddress?.cidade ? `${globalAddress.cidade}/${globalAddress.estado}` : 'Informe seu CEP'}</strong>
+            </span>
+          </button>
+
           <div className="header-search">
             <Search size={18} className="header-search-icon" />
             <input
@@ -126,6 +318,15 @@ export default function Header() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="header-search-clear"
+                onClick={() => setSearchQuery('')}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -135,10 +336,11 @@ export default function Header() {
           position: sticky;
           top: 0;
           z-index: var(--z-sticky);
-          background: rgba(255, 255, 255, 0.85);
+          background: rgba(255, 255, 255, 0.92);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           border-bottom: 1px solid var(--dark-100);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
         }
         .header-topbar {
           background: #090e1a;
@@ -188,18 +390,58 @@ export default function Header() {
           display: flex;
           align-items: center;
           gap: var(--space-4);
-          height: 64px;
+          height: 68px;
         }
         .header-logo {
           cursor: pointer;
           flex-shrink: 0;
           transition: opacity var(--transition-fast);
         }
-        .header-logo:hover { opacity: 0.8; }
+        .header-logo:hover { opacity: 0.85; }
+
+        /* Global CEP Button (Mercado Livre style) */
+        .header-cep-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          background: rgba(15, 23, 42, 0.04);
+          border: 1px solid var(--dark-200);
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-align: left;
+          flex-shrink: 0;
+        }
+        .header-cep-btn:hover {
+          background: #ffffff;
+          border-color: #38bdf8;
+          box-shadow: 0 2px 8px rgba(56, 189, 248, 0.15);
+        }
+        .header-cep-icon {
+          color: #0284c7;
+        }
+        .header-cep-info {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.15;
+        }
+        .header-cep-sub {
+          font-size: 10px;
+          color: var(--dark-400);
+        }
+        .header-cep-city {
+          font-size: 12px;
+          color: var(--dark-800);
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        /* Search Bar & Predictive Dropdown */
         .header-search {
           flex: 1;
           position: relative;
-          max-width: 500px;
+          max-width: 540px;
         }
         .header-search-icon {
           position: absolute;
@@ -211,7 +453,7 @@ export default function Header() {
         }
         .header-search-input {
           width: 100%;
-          padding: 10px 16px 10px 42px;
+          padding: 11px 40px 11px 42px;
           border: 1.5px solid var(--dark-200);
           border-radius: var(--radius-full);
           background: var(--dark-50);
@@ -221,11 +463,177 @@ export default function Header() {
         }
         .header-search-input:focus {
           outline: none;
-          border-color: var(--lime);
-          box-shadow: 0 0 0 3px var(--lime-glow);
-          background: var(--white);
+          border-color: #38bdf8;
+          box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15);
+          background: #ffffff;
         }
-        .header-search-input::placeholder { color: var(--dark-400); }
+        .header-search-input::placeholder { color: var(--dark-400); font-size: 13px; }
+        .header-search-clear {
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: var(--dark-200);
+          border: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: var(--dark-600);
+        }
+
+        /* Predictive Dropdown */
+        .predictive-dropdown {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0;
+          right: 0;
+          background: #ffffff;
+          border: 1px solid var(--dark-200);
+          border-radius: 14px;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+          overflow: hidden;
+          z-index: 1000;
+          animation: slideDown 0.2s ease-out;
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .predictive-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 16px;
+          background: var(--dark-50);
+          border-bottom: 1px solid var(--dark-100);
+          font-size: 11px;
+          color: var(--dark-500);
+          font-weight: 600;
+        }
+        .predictive-header a {
+          color: #0284c7;
+          text-decoration: none;
+        }
+        .predictive-item {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--dark-50);
+          cursor: pointer;
+          transition: background 0.15s ease;
+        }
+        .predictive-item:last-child { border-bottom: none; }
+        .predictive-item:hover {
+          background: #f8fafc;
+        }
+        .predictive-img {
+          width: 44px;
+          height: 44px;
+          border-radius: 8px;
+          object-fit: cover;
+          background: var(--dark-100);
+          flex-shrink: 0;
+        }
+        .predictive-info {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          flex: 1;
+          min-width: 0;
+        }
+        .predictive-brand-row {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+        }
+        .predictive-brand {
+          font-weight: 700;
+          color: var(--dark-400);
+          text-transform: uppercase;
+        }
+        .predictive-cat {
+          color: var(--dark-400);
+        }
+        .predictive-name {
+          font-size: 13px;
+          color: var(--dark-800);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .predictive-price-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .predictive-price-pix {
+          font-size: 13px;
+          font-weight: 800;
+          color: #15803d;
+        }
+        .predictive-price-pix small {
+          font-size: 10px;
+          font-weight: 500;
+          color: #166534;
+        }
+        .predictive-stock-ok {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          font-size: 10px;
+          color: #059669;
+          font-weight: 600;
+        }
+        .predictive-stock-out {
+          font-size: 10px;
+          color: #ef4444;
+          font-weight: 600;
+        }
+        .predictive-empty {
+          padding: 24px 16px;
+          text-align: center;
+          color: var(--dark-500);
+          font-size: 13px;
+        }
+        .predictive-suggestions {
+          padding: 16px;
+        }
+        .predictive-suggestions-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--dark-600);
+          margin-bottom: 10px;
+        }
+        .predictive-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .predictive-tag-chip {
+          padding: 5px 12px;
+          border-radius: var(--radius-full);
+          background: var(--dark-100);
+          border: 1px solid var(--dark-200);
+          font-size: 12px;
+          color: var(--dark-700);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .predictive-tag-chip:hover {
+          background: #38bdf8;
+          color: #ffffff;
+          border-color: #38bdf8;
+        }
+
         .header-actions {
           display: flex;
           align-items: center;
@@ -264,22 +672,36 @@ export default function Header() {
           display: flex;
           align-items: center;
           justify-content: center;
-          animation: slideUp 0.3s ease-out;
         }
         .header-admin-btn {
-          color: var(--lime-dark) !important;
+          color: #0284c7 !important;
           font-weight: 600;
         }
-        .header-mobile-search {
-          padding: var(--space-2) 0 var(--space-3);
+
+        /* Mobile Search & CEP */
+        .header-mobile-bar {
+          padding: 6px 0 10px;
           border-top: 1px solid var(--dark-100);
         }
-        .header-mobile-search .header-search {
-          max-width: none;
+        .header-mobile-cep-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: var(--dark-700);
+          padding: 6px 0;
+          background: none;
+          border: none;
+          cursor: pointer;
+          margin-bottom: 6px;
+        }
+        .header-mobile-cep-btn strong {
+          color: #0284c7;
         }
         @media (min-width: 768px) {
           .header-inner { height: 72px; }
-          .header-mobile-search { display: none; }
+          .header-mobile-bar { display: none; }
         }
       `}</style>
     </header>
