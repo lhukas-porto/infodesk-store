@@ -5,8 +5,8 @@ import { Award, ChevronRight, CheckCircle2 } from 'lucide-react'
 export default function BrandCarousel() {
   const { products, setSearchQuery, searchQuery } = useStore()
 
-  // Extrai dinamicamente apenas as marcas que possuem produtos com estoque ativo (> 0)
-  const availableBrands = useMemo(() => {
+  // Extrai dinamicamente as TOP 6 marcas com maior quantidade de produtos em estoque
+  const topBrands = useMemo(() => {
     if (!Array.isArray(products)) return []
 
     const map = new Map()
@@ -16,23 +16,29 @@ export default function BrandCarousel() {
       const stock = parseInt(p.stock, 10) || 0
 
       if (brandName && stock > 0) {
-        if (!map.has(brandName.toLowerCase())) {
-          map.set(brandName.toLowerCase(), {
+        const key = brandName.toLowerCase()
+        if (!map.has(key)) {
+          map.set(key, {
             name: brandName,
-            count: 1,
+            productsCount: 1,
+            totalStock: stock,
             sampleCategory: p.category || 'Disponível'
           })
         } else {
-          map.get(brandName.toLowerCase()).count += 1
+          const entry = map.get(key)
+          entry.productsCount += 1
+          entry.totalStock += stock
         }
       }
     })
 
-    // Ordena pelas marcas com maior variedade de produtos em estoque
-    return Array.from(map.values()).sort((a, b) => b.count - a.count)
+    // Ordena do maior para o menor volume de estoque e seleciona exatamente as Top 6
+    return Array.from(map.values())
+      .sort((a, b) => b.totalStock - a.totalStock || b.productsCount - a.productsCount)
+      .slice(0, 6)
   }, [products])
 
-  if (availableBrands.length === 0) {
+  if (topBrands.length === 0) {
     return null
   }
 
@@ -54,30 +60,30 @@ export default function BrandCarousel() {
         <div className="brands-header">
           <div className="brands-title-wrap">
             <Award size={20} className="brands-header-icon" />
-            <h3>Marcas Disponíveis em Estoque</h3>
+            <h3>Top 6 Marcas em Estoque</h3>
           </div>
           <span className="brands-sub">
             <CheckCircle2 size={13} style={{ color: '#4ade80', display: 'inline', marginRight: 4 }} />
-            Produtos originais a pronta entrega com envio imediato
+            Marcas com maior disponibilidade para envio imediato
           </span>
         </div>
 
         <div className="brands-grid">
-          {availableBrands.map((b) => {
+          {topBrands.map((b) => {
             const isSelected = searchQuery.toLowerCase() === b.name.toLowerCase()
             return (
               <button
                 key={b.name}
                 className={`brand-pill ${isSelected ? 'selected' : ''}`}
                 onClick={() => handleBrandClick(b.name)}
-                title={`Ver ${b.count} produto(s) da marca ${b.name}`}
+                title={`Ver produtos da marca ${b.name} (${b.totalStock} unidades em estoque)`}
               >
                 <div className="brand-pill-top">
                   <span className="brand-logo-text">{b.name.toUpperCase()}</span>
                   <ChevronRight size={14} className="brand-arrow" />
                 </div>
                 <span className="brand-badge-tag">
-                  {b.count} {b.count === 1 ? 'produto' : 'produtos'} em estoque
+                  {b.totalStock} {b.totalStock === 1 ? 'unidade' : 'unidades'} em estoque
                 </span>
               </button>
             )
@@ -87,7 +93,7 @@ export default function BrandCarousel() {
 
       <style>{`
         .brands-section {
-          padding: 32px 0;
+          padding: 28px 0;
           background: #0f172a;
           border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
@@ -95,7 +101,7 @@ export default function BrandCarousel() {
           display: flex;
           flex-direction: column;
           gap: 4px;
-          margin-bottom: 20px;
+          margin-bottom: 18px;
         }
         @media (min-width: 768px) {
           .brands-header {
@@ -134,15 +140,10 @@ export default function BrandCarousel() {
             grid-template-columns: repeat(3, 1fr);
           }
         }
-        @media (min-width: 768px) {
-          .brands-grid {
-            grid-template-columns: repeat(4, 1fr);
-          }
-        }
         @media (min-width: 1024px) {
           .brands-grid {
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 14px;
           }
         }
         .brand-pill {
@@ -150,7 +151,7 @@ export default function BrandCarousel() {
           flex-direction: column;
           align-items: flex-start;
           justify-content: center;
-          padding: 12px 14px;
+          padding: 14px 16px;
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 10px;
