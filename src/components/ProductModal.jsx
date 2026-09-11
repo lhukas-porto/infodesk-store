@@ -142,7 +142,7 @@ export default function ProductModal() {
                 </span>
               </div>
               <span className="price-installment">
-                ou <strong>R$ {(parseFloat(product.price) || 0).toFixed(2).replace('.', ',')}</strong> em até {parseInt(product.installments) || 10}x de R$ {(parseFloat(product.installmentPrice) || ((parseFloat(product.price) || 0) / (parseInt(product.installments) || 10))).toFixed(2).replace('.', ',')} sem juros no cartão
+                ou <strong>R$ {(parseFloat(product.price) || 0).toFixed(2).replace('.', ',')}</strong> em até {parseInt(product.installments) || 10}x de R$ {(parseFloat(product.installmentPrice) || ((parseFloat(product.price) || 0) / (parseInt(product.installments) || 10))).toFixed(2).replace('.', ',')} no cartão
               </span>
             </div>
 

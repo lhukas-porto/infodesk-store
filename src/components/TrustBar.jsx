@@ -16,7 +16,7 @@ export default function TrustBar() {
     {
       icon: <CreditCard size={26} className="trust-icon" />,
       title: '3% de Desconto no Pix',
-      subtitle: 'Ou parcele em até 12x sem juros no cartão'
+      subtitle: 'Ou parcele em até 12x no cartão'
     },
     {
       icon: <RotateCcw size={26} className="trust-icon" />,

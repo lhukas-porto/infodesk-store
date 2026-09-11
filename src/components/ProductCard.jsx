@@ -101,7 +101,7 @@ export default function ProductCard({ product }) {
 
           {/* Preço Parcelado */}
           <span className="price-installment">
-            ou <strong>R$ {price.toFixed(2).replace('.', ',')}</strong> em até {installments}x de R$ {installmentPrice.toFixed(2).replace('.', ',')} s/ juros
+            ou <strong>R$ {price.toFixed(2).replace('.', ',')}</strong> em até {installments}x de R$ {installmentPrice.toFixed(2).replace('.', ',')} no cartão
           </span>
         </div>
 
