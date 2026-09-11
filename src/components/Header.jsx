@@ -36,6 +36,7 @@ export default function Header() {
     globalCep,
     globalAddress,
     setShowCepModal,
+    openTrackingModal,
   } = useStore()
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -324,7 +325,29 @@ export default function Header() {
               Garantia Oficial com NF
             </span>
           </div>
-          <div className="topbar-right hide-mobile">
+          <div className="topbar-right hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <button
+              type="button"
+              className="topbar-track-btn"
+              onClick={() => openTrackingModal()}
+              style={{
+                background: 'rgba(56, 189, 248, 0.12)',
+                border: '1px solid rgba(56, 189, 248, 0.35)',
+                color: '#38bdf8',
+                borderRadius: '6px',
+                padding: '3px 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.2s'
+              }}
+              title="Rastrear Encomenda dos Correios"
+            >
+              <Truck size={13} /> Rastrear Pedido
+            </button>
             <span>Suporte Especializado: <strong>contato@infodesk.net.br</strong></span>
           </div>
         </div>

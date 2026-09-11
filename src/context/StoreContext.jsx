@@ -193,6 +193,15 @@ export function StoreProvider({ children }) {
   }, [])
   const [toast, setToast] = useState(null)
 
+  // === Rastreamento Oficial dos Correios ===
+  const [showTrackingModal, setShowTrackingModal] = useState(false)
+  const [trackingCodeToView, setTrackingCodeToView] = useState('')
+
+  const openTrackingModal = useCallback((code = '') => {
+    setTrackingCodeToView(code)
+    setShowTrackingModal(true)
+  }, [])
+
   // === Fase 3: Navegação Avançada, CEP Global & Filtros Facetados ===
   const [globalCep, setGlobalCep] = useState(() => {
     return localStorage.getItem('infodesk_global_cep') || ''
@@ -732,6 +741,10 @@ export function StoreProvider({ children }) {
     showScanner, setShowScanner,
     showAdminDashboard, setShowAdminDashboard,
     toast, showToast,
+    // Rastreamento dos Correios
+    showTrackingModal, setShowTrackingModal,
+    trackingCodeToView, setTrackingCodeToView,
+    openTrackingModal,
   }
 
   return (

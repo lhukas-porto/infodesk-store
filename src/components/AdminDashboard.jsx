@@ -3,7 +3,8 @@ import {
   X, Package, DollarSign, ShoppingCart, BarChart3, Plus,
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
   Shield, KeyRound, User, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
-  Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2
+  Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
+  MessageCircle, Send
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { generateValidEan13 } from '../services/barcodeService'
@@ -13,6 +14,13 @@ import {
   calcCommercialOriginalPrice
 } from '../services/pricingService'
 import { formatCep } from '../services/correiosService'
+import ShippingLabelModal from './ShippingLabelModal'
+import {
+  createWhatsAppLink,
+  buildPaymentReminderMessage,
+  buildShippingNotificationMessage,
+  buildDeliveredNotificationMessage
+} from '../services/whatsappService'
 
 export default function AdminDashboard() {
   const {
@@ -22,6 +30,7 @@ export default function AdminDashboard() {
     updateOrderStatus, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
     globalTaxRate, updateGlobalTaxRate,
+    openTrackingModal
   } = useStore()
 
   const [tab, setTabState] = useState(() => {
@@ -40,6 +49,7 @@ export default function AdminDashboard() {
   }, [])
   const [editingProduct, setEditingProduct] = useState(null)
   const [labelProduct, setLabelProduct] = useState(null)
+  const [labelOrderToPrint, setLabelOrderToPrint] = useState(null)
   const [productSearch, setProductSearch] = useState('')
 
   // Global tax input state
@@ -157,7 +167,9 @@ export default function AdminDashboard() {
     if (!showAdminDashboard) return
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (labelProduct) {
+        if (labelOrderToPrint) {
+          setLabelOrderToPrint(null)
+        } else if (labelProduct) {
           setLabelProduct(null)
         } else if (editingProduct) {
           setEditingProduct(null)
@@ -168,7 +180,7 @@ export default function AdminDashboard() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showAdminDashboard, labelProduct, editingProduct, setShowAdminDashboard])
+  }, [showAdminDashboard, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
 
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
@@ -801,14 +813,88 @@ export default function AdminDashboard() {
                             </select>
                           </td>
                           <td>
-                            {o.status === 'Enviado' && (
-                              <button className="btn btn-outline btn-sm" onClick={() => {
-                                const code = prompt('Código de rastreamento dos Correios:', o.trackingCode || '')
-                                if (code !== null) updateOrderStatus(o.id, 'Enviado', code.trim())
-                              }}>
-                                {o.trackingCode ? `📦 ${o.trackingCode}` : 'Inserir Rastreio'}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {/* Botão de Etiqueta e Declaração de Conteúdo */}
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => setLabelOrderToPrint(o)}
+                                title="Imprimir Etiqueta Oficial dos Correios e Declaração de Conteúdo"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderColor: '#0284c7', color: '#0284c7' }}
+                              >
+                                <Printer size={13} />
+                                <span>Etiqueta</span>
                               </button>
-                            )}
+
+                              {/* Botão de Rastreamento dos Correios */}
+                              {o.trackingCode ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => openTrackingModal(o.trackingCode)}
+                                  title={`Rastrear objeto ${o.trackingCode} em tempo real`}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderColor: 'var(--amber)', color: '#b45309' }}
+                                >
+                                  <Truck size={13} />
+                                  <span>{o.trackingCode}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => {
+                                    const code = prompt('Código de rastreamento dos Correios (ex: AA123456789BR):', o.trackingCode || '')
+                                    if (code !== null && code.trim()) {
+                                      updateOrderStatus(o.id, o.status, code.trim().toUpperCase())
+                                      showToast(`Código ${code.trim().toUpperCase()} vinculado ao pedido #${o.id}! 🚚`)
+                                    }
+                                  }}
+                                  title="Adicionar código de rastreamento dos Correios"
+                                  style={{ fontSize: '11px', color: 'var(--dark-500)' }}
+                                >
+                                  + Rastreio
+                                </button>
+                              )}
+
+                              {/* Botão WhatsApp 1-Click para comunicação com o cliente */}
+                              {o.cliente?.telefone && (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={() => {
+                                    let msg = ''
+                                    if (o.status === 'Pendente') {
+                                      msg = buildPaymentReminderMessage(o)
+                                    } else if (o.status === 'Enviado') {
+                                      msg = buildShippingNotificationMessage(o, o.trackingCode)
+                                    } else if (o.status === 'Entregue') {
+                                      msg = buildDeliveredNotificationMessage(o)
+                                    } else {
+                                      msg = `Olá ${o.cliente?.nome || ''}! Aqui é da *Infodesk Store* referente ao seu Pedido *#${o.id}*. Status atual: *${o.status}*. Se tiver qualquer dúvida, estamos à disposição!`
+                                    }
+                                    const link = createWhatsAppLink(o.cliente.telefone, msg)
+                                    window.open(link, '_blank', 'noopener,noreferrer')
+                                  }}
+                                  title={`Enviar notificação via WhatsApp (${o.status === 'Pendente' ? 'Lembrete de Pagamento' : o.status === 'Enviado' ? 'Código de Rastreio' : 'Atualização'})`}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    background: '#25D366',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    padding: '4px 8px',
+                                    borderRadius: '6px',
+                                    fontWeight: 600,
+                                    fontSize: '11px',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <MessageCircle size={13} />
+                                  <span>WhatsApp</span>
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1823,6 +1909,16 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* =========================================================
+            MODAL DE IMPRESSÃO DE ETIQUETA E DECLARAÇÃO DOS CORREIOS
+           ========================================================= */}
+        {labelOrderToPrint && (
+          <ShippingLabelModal
+            order={labelOrderToPrint}
+            onClose={() => setLabelOrderToPrint(null)}
+          />
         )}
 
         {/* Lista de sugestões de marcas para autocompletar */}

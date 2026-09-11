@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   X, User, Package, MapPin, Phone, Mail, FileText, CheckCircle2,
   Calendar, CreditCard, ExternalLink, Copy, AlertCircle, Save, Loader2,
-  Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Sparkles
+  Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Sparkles, Truck
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import {
@@ -24,7 +24,8 @@ export default function CustomerAccountModal() {
     registerCustomer,
     logoutCustomer,
     orders,
-    showToast
+    showToast,
+    openTrackingModal
   } = useStore()
 
   // Abas quando autenticado: 'profile' | 'orders'
@@ -917,12 +918,21 @@ export default function CustomerAccountModal() {
                           {order.trackingCode && (
                             <div className="cust-tracking-box">
                               <span>📦 Rastreio dos Correios: <strong>{order.trackingCode}</strong></span>
-                              <button
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => handleCopy(order.trackingCode)}
-                              >
-                                <Copy size={12} /> Copiar Código
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => openTrackingModal(order.trackingCode)}
+                                  title="Rastrear envio em tempo real"
+                                >
+                                  <Truck size={13} /> Rastrear Encomenda
+                                </button>
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => handleCopy(order.trackingCode)}
+                                >
+                                  <Copy size={12} /> Copiar
+                                </button>
+                              </div>
                             </div>
                           )}
 

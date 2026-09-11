@@ -52,6 +52,17 @@ function correiosApiPlugin() {
             return
           }
         }
+        if (url === '/api/shipping/track') {
+          try {
+            const { default: handler } = await import('./api/shipping/track.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/shipping/track:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
         next()
       })
     }

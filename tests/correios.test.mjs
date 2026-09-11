@@ -6,6 +6,13 @@ import { parseBrazilianCurrency } from '../server/correios/correiosPrice.js'
 import { calculatePackage, CORREIOS_LIMITS } from '../server/correios/packagePacker.js'
 import { CORREIOS_SERVICES } from '../server/correios/config.js'
 import { enrichItemsWithRealData, validateOrderShipping } from '../server/correios/shippingCalculator.js'
+import { normalizeTrackingCode, generateRealisticTrackingEvents } from '../server/correios/correiosTracking.js'
+import {
+  formatPhoneForWhatsApp,
+  createWhatsAppLink,
+  buildPaymentReminderMessage,
+  buildShippingNotificationMessage
+} from '../src/services/whatsappService.js'
 
 console.log('🧪 Iniciando Bateria de Testes dos Correios...\n')
 
@@ -303,6 +310,62 @@ await runAsyncTest('Diagnóstico reporta checklist amigável quando faltam crede
   assert.equal(diag.results[3].item, 'SEDEX disponível')
   assert.equal(diag.results[4].item, 'API Preço funcionando')
   assert.equal(diag.results[5].item, 'API Prazo funcionando')
+})
+
+// =========================================================================
+// 13. Normalização e Validação de Códigos de Rastreio dos Correios
+// =========================================================================
+runTest('Normalização de código de rastreamento dos Correios', () => {
+  assert.equal(normalizeTrackingCode('  qb 123 456 789 br  '), 'QB123456789BR')
+  assert.equal(normalizeTrackingCode('sedex-12345'), 'SEDEX12345')
+  assert.equal(normalizeTrackingCode(''), '')
+
+  const result = generateRealisticTrackingEvents('QB123456789BR')
+  assert.equal(result.codigo, 'QB123456789BR')
+  assert.ok(Array.isArray(result.eventos), 'result.eventos deve ser um array')
+  assert.ok(result.eventos.length >= 3, 'Deve gerar no mínimo 3 eventos na linha do tempo')
+  assert.ok(result.statusAtual, 'Deve indicar o estágio atual da entrega')
+  assert.ok(result.eventos[0].data, 'Primeiro evento deve conter data')
+})
+
+// =========================================================================
+// 14. Utilitários do WhatsApp (E.164, Links e Templates de Mensagens)
+// =========================================================================
+runTest('Utilitários do WhatsApp (Formatação telefônica, mensagens e links)', () => {
+  // Formatação de telefone para DDI 55
+  assert.equal(formatPhoneForWhatsApp('(61) 99999-8888'), '5561999998888')
+  assert.equal(formatPhoneForWhatsApp('61996272630'), '5561996272630')
+  assert.equal(formatPhoneForWhatsApp('+55 61 99999-8888'), '5561999998888')
+
+  // Geração de link wa.me
+  const link = createWhatsAppLink('61996272630', 'Olá mundo!')
+  assert.ok(link.startsWith('https://wa.me/5561996272630?text='))
+  assert.ok(link.includes(encodeURIComponent('Olá mundo!')))
+
+  // Template de lembrete de pagamento
+  const orderMock = {
+    id: 'PED-999',
+    total: 159.90,
+    paymentMethod: 'pix',
+    pixKey: 'pix-infodesk-key-123',
+    cliente: { nome: 'Lucas Silva' }
+  }
+  const payMsg = buildPaymentReminderMessage(orderMock)
+  assert.ok(payMsg.includes('Lucas'))
+  assert.ok(payMsg.includes('PED-999'))
+  assert.ok(payMsg.includes('R$ 159,90'))
+  assert.ok(payMsg.includes('pix-infodesk-key-123'))
+
+  // Template de notificação de envio com rastreio
+  const orderShipped = {
+    ...orderMock,
+    trackingCode: 'QB123456789BR',
+    freteType: 'SEDEX'
+  }
+  const shipMsg = buildShippingNotificationMessage(orderShipped)
+  assert.ok(shipMsg.includes('QB123456789BR'))
+  assert.ok(shipMsg.includes('SEDEX'))
+  assert.ok(shipMsg.includes('rastreamento.correios.com.br'))
 })
 
 console.log(`\n🎉 Todos os ${passedTests} testes foram concluídos com SUCESSO! 🚀`)

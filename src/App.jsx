@@ -16,6 +16,7 @@ import TrustBar from './components/TrustBar'
 import BrandCarousel from './components/BrandCarousel'
 import ProductSortFilter from './components/ProductSortFilter'
 import CepModal from './components/CepModal'
+import TrackingModal from './components/TrackingModal'
 
 export default function App() {
   const {
@@ -131,6 +132,7 @@ export default function App() {
       <AdminDashboard />
       <BarcodeScannerModal />
       <CepModal />
+      <TrackingModal />
 
       {/* Toast */}
       {toast && (

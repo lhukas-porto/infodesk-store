@@ -44,6 +44,18 @@ export default function AdminLoginModal() {
     }
   }, [showAdminLogin, adminConfig.email])
 
+  // Suporte a fechar modal com tecla ESC
+  useEffect(() => {
+    if (!showAdminLogin) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowAdminLogin(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showAdminLogin, setShowAdminLogin])
+
   if (!showAdminLogin) return null
 
   const handleSubmit = (e) => {
@@ -93,18 +105,6 @@ export default function AdminLoginModal() {
     setError('')
     setShowCredsHint(false)
   }
-
-  // Suporte a fechar modal com tecla ESC
-  useEffect(() => {
-    if (!showAdminLogin) return
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        setShowAdminLogin(false)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showAdminLogin, setShowAdminLogin])
 
   return (
     <div className="overlay">

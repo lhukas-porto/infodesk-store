@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   X, CreditCard, FileText, QrCode, ArrowLeft, CheckCircle, Copy,
-  MapPin, Loader2, CheckCircle2, AlertCircle, Sparkles
+  MapPin, Loader2, CheckCircle2, AlertCircle, Sparkles, MessageCircle
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import {
@@ -15,6 +15,7 @@ import {
   getProductWeight
 } from '../services/correiosService'
 import { gerarBoleto, gerarBoletoPDF, gerarLinkPagamento } from '../services/paymentService'
+import { createWhatsAppLink, buildCustomerOrderSupportMessage } from '../services/whatsappService'
 
 export default function CheckoutModal() {
   const {
@@ -105,8 +106,6 @@ export default function CheckoutModal() {
       fetchFrete(clean)
     }
   }, [cliente.cep, cartTotal, finalCartWeight])
-
-  if (!showCheckout) return null
 
   // Auto-busca nos Correios ao preencher 8 dígitos do CEP
   const handleCepChange = async (value) => {
@@ -257,6 +256,8 @@ export default function CheckoutModal() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showCheckout])
+
+  if (!showCheckout) return null
 
   return (
     <div className="overlay">
@@ -602,6 +603,50 @@ export default function CheckoutModal() {
                   </a>
                 </div>
               )}
+
+              {/* Canal de Atendimento e Acompanhamento no WhatsApp */}
+              <div style={{
+                marginTop: 'var(--space-4)',
+                padding: 'var(--space-4)',
+                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+                border: '1px solid #bbf7d0',
+                borderRadius: 'var(--radius-lg)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#15803d', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
+                  <MessageCircle size={18} />
+                  <span>Acompanhe pelo WhatsApp</span>
+                </div>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-600)', margin: 0, maxWidth: 360, lineHeight: 1.4 }}>
+                  Tire dúvidas sobre seu pedido, confirme seu pagamento ou receba atualizações de envio dos Correios diretamente no seu celular.
+                </p>
+                <a
+                  href={createWhatsAppLink('61996272630', buildCustomerOrderSupportMessage(orderResult))}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm"
+                  style={{
+                    background: '#25D366',
+                    color: '#ffffff',
+                    border: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 700,
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    textDecoration: 'none',
+                    marginTop: '2px',
+                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)'
+                  }}
+                >
+                  <MessageCircle size={15} /> Notificar no WhatsApp da Loja
+                </a>
+              </div>
 
               <button className="btn btn-outline btn-lg" onClick={closeAll} style={{ marginTop: 'var(--space-4)' }}>
                 Voltar à Loja
