@@ -102,6 +102,7 @@ export default function BarcodeScannerModal() {
   const [noMatchFound, setNoMatchFound] = useState(false)
   const [detectedProduct, setDetectedProduct] = useState(null)
   const [lastScannedCode, setLastScannedCode] = useState('')
+  const [manualSearched, setManualSearched] = useState(false)
 
   // Barcode / Label generation state
   const [generatedEan, setGeneratedEan] = useState('')
@@ -395,6 +396,28 @@ export default function BarcodeScannerModal() {
     }
   }, [scanning, activeTab, showScanner, products, lastScannedCode])
 
+  // Busca manual de código de barras digitado ou lido via leitor USB
+  const handleSearchManualEan = (codeToSearch = manualEan) => {
+    const clean = (codeToSearch || '').trim()
+    if (!clean) {
+      showToast('Digite ou passe o leitor com o código de barras.')
+      return
+    }
+
+    setManualSearched(true)
+    const cleanDigits = clean.replace(/\D/g, '')
+    const found = (products || []).find(p => p.ean && p.ean.replace(/\D/g, '') === cleanDigits)
+
+    if (found) {
+      setDetectedProduct(found)
+      playAudioBeep()
+      showToast(`Produto encontrado: "${found.name}" (Estoque: ${found.stock})! 🎯`)
+    } else {
+      setDetectedProduct(null)
+      showToast(`Código ${clean} não está cadastrado no estoque da loja.`)
+    }
+  }
+
   const close = () => {
     stopCamera()
     setShowScanner(false)
@@ -405,6 +428,7 @@ export default function BarcodeScannerModal() {
     setManualEan('')
     setDetectedProduct(null)
     setLastScannedCode('')
+    setManualSearched(false)
   }
 
   // Suporte a fechar scanner com tecla ESC
@@ -649,49 +673,120 @@ export default function BarcodeScannerModal() {
               {/* Exibição do Produto se detectado no Estoque */}
               {detectedProduct && (
                 <div className="bcs-detected-card">
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
                     <img
                       src={detectedProduct.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=200'}
                       alt={detectedProduct.name}
-                      style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--dark-200)' }}
+                      style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--dark-200)' }}
                     />
-                    <div style={{ flex: 1 }}>
-                      <span className="badge badge-lime" style={{ fontSize: '10px', marginBottom: 2 }}>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <span className="badge badge-lime" style={{ fontSize: '10px', marginBottom: 4 }}>
                         ✓ PRODUTO EM ESTOQUE
                       </span>
-                      <strong style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--dark-900)' }}>
+                      <strong style={{ display: 'block', fontSize: 'var(--text-base)', color: 'var(--dark-900)' }}>
                         {detectedProduct.name}
                       </strong>
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
-                        Preço: <strong>R$ {(detectedProduct.price || 0).toFixed(2).replace('.', ',')}</strong> | Estoque: <strong>{detectedProduct.stock} un</strong> | EAN: <code>{detectedProduct.ean}</code>
-                      </span>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)', marginTop: 2 }}>
+                        Marca: <strong>{detectedProduct.brand || 'Genérica'}</strong> | Categoria: <strong>{detectedProduct.category}</strong>
+                      </div>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--lime-dark)', fontWeight: 700 }}>
+                          R$ {(detectedProduct.price || 0).toFixed(2).replace('.', ',')}
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--dark-500)' }}>
+                          Estoque Atual: <strong>{detectedProduct.stock} un</strong>
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--dark-400)', fontFamily: 'monospace' }}>
+                          EAN: {detectedProduct.ean}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => {
+                          setGeneratedEan(detectedProduct.ean || manualEan)
+                          setCustomProduct({
+                            name: detectedProduct.name,
+                            brand: detectedProduct.brand,
+                            category: detectedProduct.category,
+                            price: detectedProduct.price,
+                            costPrice: detectedProduct.costPrice || '',
+                            stock: detectedProduct.stock
+                          })
+                          setActiveTab('label')
+                        }}
+                      >
+                        <Printer size={14} /> Imprimir Etiqueta
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
 
+              {/* Aviso caso código não esteja cadastrado */}
+              {manualSearched && !detectedProduct && (
+                <div className="bcs-not-found-card">
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <AlertCircle size={20} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <strong style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--dark-900)' }}>
+                        Código {manualEan || 'informado'} não cadastrado no estoque
+                      </strong>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
+                        Nenhum produto em estoque possui este código de barras. Deseja cadastrá-lo agora?
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        setGeneratedEan(manualEan.trim() || generateValidEan13('789'))
+                        setCustomProduct({
+                          name: '',
+                          brand: '',
+                          category: 'Hardware',
+                          price: '',
+                          costPrice: '',
+                          stock: 1
+                        })
+                        setActiveTab('label')
+                      }}
+                    >
+                      <Plus size={14} /> Cadastrar Produto com este EAN
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="bcs-manual-ean" style={{ marginTop: 'var(--space-4)' }}>
-                <label>Ou digite o Código EAN-13 manualmente:</label>
+                <label>Ou digite / passe o leitor de código de barras USB:</label>
                 <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                   <input
                     className="input-field"
                     value={manualEan}
-                    onChange={e => setManualEan(e.target.value)}
-                    placeholder="Ex: 7891234567890"
-                    maxLength={13}
+                    onChange={e => {
+                      setManualEan(e.target.value)
+                      if (manualSearched) setManualSearched(false)
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleSearchManualEan()
+                      }
+                    }}
+                    placeholder="Ex: 7891234567890 (pressione Enter ou clique em Buscar)"
+                    maxLength={14}
                   />
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={() => {
-                      if (manualEan.length >= 8) {
-                        performVisualSearch(null)
-                      } else {
-                        showToast('Digite pelo menos 8 dígitos do código de barras.')
-                      }
-                    }}
+                    onClick={() => handleSearchManualEan()}
                   >
-                    Buscar
+                    <Search size={15} /> Buscar
                   </button>
                 </div>
               </div>
@@ -1102,6 +1197,13 @@ export default function BarcodeScannerModal() {
             padding: var(--space-4);
             background: #f0fdf4;
             border: 1px solid #bbf7d0;
+            border-radius: var(--radius-xl);
+          }
+          .bcs-not-found-card {
+            margin-top: var(--space-4);
+            padding: var(--space-4);
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
             border-radius: var(--radius-xl);
           }
         `}</style>
