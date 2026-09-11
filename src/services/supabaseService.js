@@ -315,6 +315,30 @@ export async function insertOrderToDb(order) {
   }
 }
 
+export async function updateOrderInDb(orderId, updates) {
+  if (!isSupabaseConfigured || !supabase || !orderId) return false
+  try {
+    const payload = {}
+    if (updates.status !== undefined) payload.status = updates.status
+    if (updates.trackingCode !== undefined) payload.tracking_code = updates.trackingCode
+    if (updates.tracking_code !== undefined) payload.tracking_code = updates.tracking_code
+
+    const { error } = await supabase
+      .from('orders')
+      .update(payload)
+      .eq('id', orderId)
+
+    if (error) {
+      console.warn('Supabase: Erro ao atualizar pedido:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('Supabase: Falha ao atualizar pedido:', err)
+    return false
+  }
+}
+
 // === CONFIGURAÇÕES GLOBAIS ===
 export async function fetchStoreSettingFromDb(key) {
   if (!isSupabaseConfigured || !supabase) return null

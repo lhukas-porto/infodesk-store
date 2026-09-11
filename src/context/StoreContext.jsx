@@ -10,6 +10,7 @@ import {
   upsertCustomerToDb,
   fetchOrdersFromDb,
   insertOrderToDb,
+  updateOrderInDb,
   fetchStoreSettingFromDb,
   saveStoreSettingToDb
 } from '../services/supabaseService'
@@ -803,10 +804,25 @@ export function StoreProvider({ children }) {
     return order
   }, [products, updateProduct, clearCart, showToast])
 
-  const updateOrderStatus = useCallback((orderId, status, trackingCode) => {
-    setOrders(prev => prev.map(o =>
-      o.id === orderId ? { ...o, status, ...(trackingCode ? { trackingCode } : {}) } : o
-    ))
+  const updateOrderStatus = useCallback(async (orderId, status, trackingCode) => {
+    setOrders(prev => {
+      const updated = prev.map(o =>
+        o.id === orderId ? { ...o, status, ...(trackingCode ? { trackingCode } : {}) } : o
+      )
+      try {
+        localStorage.setItem('infodesk_orders', JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+
+    if (isSupabaseConfigured) {
+      try {
+        await updateOrderInDb(orderId, { status, trackingCode })
+      } catch (err) {
+        console.warn('Supabase update order error:', err)
+      }
+    }
+
     showToast(`Pedido ${orderId} atualizado para: ${status}`)
   }, [showToast])
 

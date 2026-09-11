@@ -21,10 +21,15 @@ export default class ErrorBoundary extends React.Component {
   }
 
   handleResetCache = () => {
-    if (window.confirm('Deseja redefinir os dados locais para o padrão da loja?')) {
-      localStorage.clear()
-      window.location.reload()
+    if (!this.state.confirmReset) {
+      this.setState({ confirmReset: true })
+      return
     }
+    try {
+      localStorage.clear()
+      sessionStorage.clear()
+    } catch {}
+    window.location.reload()
   }
 
   render() {
@@ -50,8 +55,13 @@ export default class ErrorBoundary extends React.Component {
               <button type="button" className="btn btn-primary" onClick={this.handleReload}>
                 <RefreshCw size={16} /> Recarregar Loja
               </button>
-              <button type="button" className="btn btn-outline" onClick={this.handleResetCache}>
-                <Trash2 size={16} /> Restaurar Padrões Locais
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={this.state.confirmReset ? { background: '#ef4444', color: '#fff', borderColor: '#ef4444' } : {}}
+                onClick={this.handleResetCache}
+              >
+                <Trash2 size={16} /> {this.state.confirmReset ? 'Confirmar Restauração' : 'Restaurar Padrões Locais'}
               </button>
             </div>
           </div>

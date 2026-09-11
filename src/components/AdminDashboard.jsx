@@ -61,6 +61,8 @@ export default function AdminDashboard() {
   const [labelOrderToPrint, setLabelOrderToPrint] = useState(null)
   const [productToDelete, setProductToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [orderToEditTracking, setOrderToEditTracking] = useState(null)
+  const [trackingCodeInput, setTrackingCodeInput] = useState('')
   const [productSearch, setProductSearch] = useState('')
 
   // Global tax input state
@@ -301,7 +303,9 @@ export default function AdminDashboard() {
     if (!showAdminDashboard) return
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (productToDelete) {
+        if (orderToEditTracking) {
+          setOrderToEditTracking(null)
+        } else if (productToDelete) {
           setProductToDelete(null)
         } else if (labelOrderToPrint) {
           setLabelOrderToPrint(null)
@@ -316,7 +320,7 @@ export default function AdminDashboard() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showAdminDashboard, productToDelete, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
+  }, [showAdminDashboard, orderToEditTracking, productToDelete, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
 
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
@@ -961,26 +965,37 @@ export default function AdminDashboard() {
 
                               {/* Botão de Rastreamento dos Correios */}
                               {o.trackingCode ? (
-                                <button
-                                  type="button"
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() => openTrackingModal(o.trackingCode)}
-                                  title={`Rastrear objeto ${o.trackingCode} em tempo real`}
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderColor: 'var(--amber)', color: '#b45309' }}
-                                >
-                                  <Truck size={13} />
-                                  <span>{o.trackingCode}</span>
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline btn-sm"
+                                    onClick={() => openTrackingModal(o.trackingCode)}
+                                    title={`Rastrear objeto ${o.trackingCode} em tempo real`}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderColor: 'var(--amber)', color: '#b45309' }}
+                                  >
+                                    <Truck size={13} />
+                                    <span>{o.trackingCode}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => {
+                                      setOrderToEditTracking(o)
+                                      setTrackingCodeInput(o.trackingCode || '')
+                                    }}
+                                    title="Editar código de rastreamento"
+                                    style={{ padding: '4px', color: 'var(--dark-500)' }}
+                                  >
+                                    <Pencil size={11} />
+                                  </button>
+                                </div>
                               ) : (
                                 <button
                                   type="button"
                                   className="btn btn-ghost btn-sm"
                                   onClick={() => {
-                                    const code = prompt('Código de rastreamento dos Correios (ex: AA123456789BR):', o.trackingCode || '')
-                                    if (code !== null && code.trim()) {
-                                      updateOrderStatus(o.id, o.status, code.trim().toUpperCase())
-                                      showToast(`Código ${code.trim().toUpperCase()} vinculado ao pedido #${o.id}! 🚚`)
-                                    }
+                                    setOrderToEditTracking(o)
+                                    setTrackingCodeInput(o.trackingCode || '')
                                   }}
                                   title="Adicionar código de rastreamento dos Correios"
                                   style={{ fontSize: '11px', color: 'var(--dark-500)' }}
@@ -2481,6 +2496,73 @@ export default function AdminDashboard() {
                   <Trash2 size={16} /> Sim, Excluir Produto
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            MODAL DE VINCULAÇÃO DE CÓDIGO DE RASTREIO DOS CORREIOS
+           ========================================================= */}
+        {orderToEditTracking && (
+          <div className="overlay" style={{ zIndex: 750 }}>
+            <div className="modal" style={{ maxWidth: 440, padding: 'var(--space-6)' }}>
+              <div style={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                background: 'rgba(234, 179, 8, 0.1)',
+                color: '#b45309',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto var(--space-4)'
+              }}>
+                <Truck size={24} />
+              </div>
+              <h3 style={{ textAlign: 'center', marginBottom: 'var(--space-2)' }}>Código de Rastreamento</h3>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--dark-600)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+                Vincule o código dos Correios ao pedido <strong>#{orderToEditTracking.id}</strong> para que o cliente acompanhe a entrega em tempo real.
+              </p>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault()
+                const code = trackingCodeInput.trim().toUpperCase()
+                await updateOrderStatus(orderToEditTracking.id, orderToEditTracking.status, code)
+                showToast(code ? `Código ${code} vinculado ao pedido #${orderToEditTracking.id}! 🚚` : 'Código de rastreio removido.')
+                setOrderToEditTracking(null)
+              }}>
+                <div style={{ marginBottom: 'var(--space-4)' }}>
+                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--dark-700)', marginBottom: 6 }}>
+                    Código do Objeto (ex: AA123456789BR)
+                  </label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="AA123456789BR"
+                    value={trackingCodeInput}
+                    autoFocus
+                    maxLength={13}
+                    style={{ textTransform: 'uppercase', fontFamily: 'monospace', letterSpacing: '1px', fontWeight: 600 }}
+                    onChange={e => setTrackingCodeInput(e.target.value.toUpperCase())}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setOrderToEditTracking(null)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                  >
+                    Salvar Rastreio
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
