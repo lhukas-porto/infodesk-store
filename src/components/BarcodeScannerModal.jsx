@@ -131,8 +131,6 @@ export default function BarcodeScannerModal() {
     }
   }, [])
 
-  if (!showScanner) return null
-
   // --- Camera Handlers ---
   const startCamera = async () => {
     try {
@@ -296,6 +294,8 @@ export default function BarcodeScannerModal() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showScanner])
+
+  if (!showScanner) return null
 
   return (
     <div className="overlay">
