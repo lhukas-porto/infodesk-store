@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
+import { getCompanyPublicName } from '../services/companyService'
 
 export default function Header() {
   const {
@@ -37,7 +38,10 @@ export default function Header() {
     globalAddress,
     setShowCepModal,
     openTrackingModal,
+    companyData,
   } = useStore()
+
+  const publicName = getCompanyPublicName(companyData)
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
@@ -348,7 +352,7 @@ export default function Header() {
             >
               <Truck size={13} /> Rastrear Pedido
             </button>
-            <span>Suporte Especializado: <strong>contato@infodesk.net.br</strong></span>
+            <span>Suporte Especializado: <strong>{companyData?.emailAtendimento || companyData?.emailPrincipal || 'contato@infodesk.net.br'}</strong></span>
           </div>
         </div>
       </div>
@@ -356,7 +360,31 @@ export default function Header() {
       <div className="header-inner container">
         {/* Logo */}
         <div className="header-logo" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          <InfodeskLogo size={130} />
+          {companyData?.logo ? (
+            <img
+              src={companyData.logo}
+              alt={companyData.logoAlt || publicName}
+              style={{
+                height: '42px',
+                maxWidth: '180px',
+                objectFit: 'contain',
+                display: 'block'
+              }}
+            />
+          ) : (
+            <span style={{
+              fontSize: '22px',
+              fontWeight: 800,
+              letterSpacing: '-0.5px',
+              color: 'var(--dark-900)',
+              fontFamily: 'var(--font-display, sans-serif)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              {publicName}
+            </span>
+          )}
         </div>
 
         {/* Global CEP Button (Mercado Livre / Amazon Pattern) */}

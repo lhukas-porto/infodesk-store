@@ -63,6 +63,17 @@ function correiosApiPlugin() {
             return
           }
         }
+        if (url === '/api/company/config') {
+          try {
+            const { default: handler } = await import('./api/company/config.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/company/config:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
         next()
       })
     }

@@ -27,7 +27,8 @@ export default function CheckoutModal() {
     showToast,
     customerProfile,
     globalCep,
-    globalAddress
+    globalAddress,
+    companyData
   } = useStore()
   const [step, setStep] = useState(1) // 1: Info, 2: Freight, 3: Payment, 4: Success
   const [cliente, setCliente] = useState({
@@ -625,7 +626,7 @@ export default function CheckoutModal() {
                   Tire dúvidas sobre seu pedido, confirme seu pagamento ou receba atualizações de envio dos Correios diretamente no seu celular.
                 </p>
                 <a
-                  href={createWhatsAppLink('61996272630', buildCustomerOrderSupportMessage(orderResult))}
+                  href={createWhatsAppLink(companyData?.whatsapp || '61996272630', buildCustomerOrderSupportMessage(orderResult, companyData))}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-sm"

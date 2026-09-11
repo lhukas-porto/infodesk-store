@@ -4,7 +4,7 @@ import {
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
   Shield, KeyRound, User, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
   Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
-  MessageCircle, Send
+  MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { generateValidEan13 } from '../services/barcodeService'
@@ -13,7 +13,7 @@ import {
   calcCommercialSellPrice,
   calcCommercialOriginalPrice
 } from '../services/pricingService'
-import { formatCep } from '../services/correiosService'
+import { formatCep, consultarCep } from '../services/correiosService'
 import ShippingLabelModal from './ShippingLabelModal'
 import {
   createWhatsAppLink,
@@ -21,6 +21,14 @@ import {
   buildShippingNotificationMessage,
   buildDeliveredNotificationMessage
 } from '../services/whatsappService'
+import {
+  formatCnpj,
+  formatPhone as formatCompanyPhone,
+  formatCep as formatCompanyCep,
+  isValidCnpj,
+  isValidEmail,
+  isValidUrl
+} from '../services/companyService'
 
 export default function AdminDashboard() {
   const {
@@ -30,7 +38,8 @@ export default function AdminDashboard() {
     updateOrderStatus, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
     globalTaxRate, updateGlobalTaxRate,
-    openTrackingModal
+    openTrackingModal,
+    companyData, updateCompanyData
   } = useStore()
 
   const [tab, setTabState] = useState(() => {
@@ -122,6 +131,129 @@ export default function AdminDashboard() {
   const [isSavingCorreios, setIsSavingCorreios] = useState(false)
   const [isTestingCorreios, setIsTestingCorreios] = useState(false)
   const [testResults, setTestResults] = useState(null)
+
+  // === Estado da Aba "Dados da Empresa" ===
+  const [companyForm, setCompanyForm] = useState(companyData || {})
+  const [isSavingCompany, setIsSavingCompany] = useState(false)
+  const [logoPreview, setLogoPreview] = useState(companyData?.logo || '')
+  const [logoError, setLogoError] = useState('')
+  const [isSearchingCompanyCep, setIsSearchingCompanyCep] = useState(false)
+
+  useEffect(() => {
+    if (companyData) {
+      setCompanyForm(companyData)
+      setLogoPreview(companyData.logo || '')
+    }
+  }, [companyData])
+
+  const handleCompanyLogoUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setLogoError('')
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setLogoError('Formato inválido. Selecione um arquivo PNG, JPG, JPEG ou WEBP.')
+      showToast('Formato inválido. Use PNG, JPG ou WEBP.', 'error')
+      return
+    }
+
+    const maxSize = 2 * 1024 * 1024 // 2 MB
+    if (file.size > maxSize) {
+      setLogoError(`Arquivo excede 2 MB (${(file.size / (1024 * 1024)).toFixed(2)} MB).`)
+      showToast('O arquivo excede o limite de 2 MB.', 'error')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const base64 = event.target?.result
+      if (base64) {
+        setLogoPreview(base64)
+        setCompanyForm(prev => ({ ...prev, logo: base64 }))
+        showToast('Nova logo carregada com sucesso! Clique em Salvar para aplicar.')
+      }
+    }
+    reader.onerror = () => {
+      setLogoError('Erro ao ler a imagem. A logo anterior foi preservada.')
+      showToast('Falha no upload. A logo anterior foi mantida.', 'error')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveCompanyLogo = () => {
+    setLogoPreview('')
+    setCompanyForm(prev => ({ ...prev, logo: '' }))
+    setLogoError('')
+    showToast('Logo removida. A loja passará a exibir o Nome Fantasia em texto.')
+  }
+
+  const handleCompanyCepChange = async (val) => {
+    const formatted = formatCompanyCep(val)
+    setCompanyForm(prev => ({ ...prev, cep: formatted }))
+
+    const clean = formatted.replace(/\D/g, '')
+    if (clean.length === 8) {
+      setIsSearchingCompanyCep(true)
+      try {
+        const data = await consultarCep(clean)
+        if (data && !data.erro) {
+          setCompanyForm(prev => ({
+            ...prev,
+            endereco: data.logradouro || prev.endereco,
+            bairro: data.bairro || prev.bairro,
+            cidade: data.localidade || prev.cidade,
+            estado: data.uf || prev.estado
+          }))
+          showToast(`Endereço localizado: ${data.localidade} - ${data.uf} 📍`)
+        }
+      } catch {
+        // Silencioso se der erro na busca
+      } finally {
+        setIsSearchingCompanyCep(false)
+      }
+    }
+  }
+
+  const handleSaveCompany = async (e) => {
+    e?.preventDefault()
+
+    if (!companyForm.razaoSocial?.trim()) {
+      showToast('Por favor, informe a Razão Social da empresa.', 'error')
+      return
+    }
+    if (!companyForm.nomeFantasia?.trim()) {
+      showToast('Por favor, informe o Nome Fantasia da empresa.', 'error')
+      return
+    }
+    if (companyForm.cnpj && !isValidCnpj(companyForm.cnpj)) {
+      showToast('O CNPJ informado possui dígitos inválidos. Verifique.', 'error')
+      return
+    }
+    if (companyForm.emailPrincipal && !isValidEmail(companyForm.emailPrincipal)) {
+      showToast('E-mail principal inválido.', 'error')
+      return
+    }
+    if (companyForm.emailAtendimento && !isValidEmail(companyForm.emailAtendimento)) {
+      showToast('E-mail de atendimento inválido.', 'error')
+      return
+    }
+
+    setIsSavingCompany(true)
+    try {
+      const res = await updateCompanyData(companyForm)
+      if (res.success) {
+        showToast('Dados da empresa salvos e atualizados na loja com sucesso! 🏢✅')
+      } else {
+        showToast(res.error || 'Erro ao salvar dados da empresa.', 'error')
+      }
+    } catch {
+      showToast('Erro de conexão ao salvar dados da empresa.', 'error')
+    } finally {
+      setIsSavingCompany(false)
+    }
+  }
 
   // Carrega configurações persistidas dos Correios do backend (com cache-busting)
   const syncCorreiosFromBackend = useCallback((storeIdToFetch = 'default') => {
@@ -530,6 +662,7 @@ export default function AdminDashboard() {
             { id: 'products', icon: <Package size={16} />, label: `Produtos (${products.length})` },
             { id: 'orders', icon: <ShoppingCart size={16} />, label: `Pedidos (${orders.length})` },
             { id: 'add', icon: <Plus size={16} />, label: 'Cadastrar Produto' },
+            { id: 'company', icon: <Building2 size={16} />, label: 'Dados da Empresa' },
             { id: 'shipping', icon: <Truck size={16} />, label: 'Frete & Entregas' },
             { id: 'security', icon: <KeyRound size={16} />, label: 'Segurança & Senha' },
           ].map(t => (
@@ -1433,6 +1566,407 @@ export default function AdminDashboard() {
                   )}
                 </form>
               </div>
+            </div>
+          )}
+
+          {/* Company Data Tab */}
+          {tab === 'company' && (
+            <div className="adm-editor-form">
+              <div className="adm-editor-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--lime-glow)', color: 'var(--lime-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Building2 size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Dados da Empresa & Identidade Visual</h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
+                      Personalize os dados cadastrais, fiscais e a marca do seu e-commerce. As alterações são sincronizadas automaticamente em toda a loja pública.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveCompany} className="adm-editor-grid">
+                {/* 1. Identificação Fiscal & Jurídica */}
+                <div className="adm-editor-section">
+                  <h4 className="adm-section-title">
+                    <Briefcase size={16} /> Identificação Fiscal & Jurídica
+                  </h4>
+                  <div className="ck-form-grid">
+                    <div className="ck-field ck-field-full">
+                      <label>Razão Social *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.razaoSocial || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, razaoSocial: e.target.value })}
+                        placeholder="Ex: Minha Empresa Comercial Ltda"
+                        required
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Nome Fantasia (Nome Público da Loja) *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.nomeFantasia || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, nomeFantasia: e.target.value })}
+                        placeholder="Ex: Minha Loja Store"
+                        required
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--dark-500)', marginTop: '2px', display: 'block' }}>
+                        💡 Exibido no cabeçalho, título do navegador e rodapé.
+                      </span>
+                    </div>
+                    <div className="ck-field">
+                      <label>CNPJ *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.cnpj || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, cnpj: formatCnpj(e.target.value) })}
+                        placeholder="00.000.000/0000-00"
+                        maxLength={18}
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Inscrição Estadual (IE)</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.inscricaoEstadual || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, inscricaoEstadual: e.target.value })}
+                        placeholder="Ex: 07.123.456/001-00 ou Isento"
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Inscrição Municipal (IM)</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.inscricaoMunicipal || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, inscricaoMunicipal: e.target.value })}
+                        placeholder="Ex: 12345678"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Contatos & Canais de Atendimento */}
+                <div className="adm-editor-section">
+                  <h4 className="adm-section-title">
+                    <Phone size={16} /> Contatos & Canais Oficiais de Atendimento
+                  </h4>
+                  <div className="ck-form-grid">
+                    <div className="ck-field">
+                      <label>E-mail Principal / Administrativo *</label>
+                      <input
+                        type="email"
+                        className="input-field"
+                        value={companyForm.emailPrincipal || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, emailPrincipal: e.target.value })}
+                        placeholder="contato@suaempresa.com.br"
+                        required
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>E-mail de Atendimento ao Cliente</label>
+                      <input
+                        type="email"
+                        className="input-field"
+                        value={companyForm.emailAtendimento || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, emailAtendimento: e.target.value })}
+                        placeholder="suporte@suaempresa.com.br"
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Telefone Fixo</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.telefone || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, telefone: formatCompanyPhone(e.target.value) })}
+                        placeholder="(61) 3033-0000"
+                        maxLength={15}
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>WhatsApp Oficial da Loja *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.whatsapp || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, whatsapp: formatCompanyPhone(e.target.value) })}
+                        placeholder="(61) 9 9999-9999"
+                        maxLength={16}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--dark-500)', marginTop: '2px', display: 'block' }}>
+                        💬 Utilizado nos botões de contato do rodapé, checkout e notificações de pedidos.
+                      </span>
+                    </div>
+                    <div className="ck-field ck-field-full">
+                      <label>Site Oficial / Domínio</label>
+                      <input
+                        type="url"
+                        className="input-field"
+                        value={companyForm.site || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, site: e.target.value })}
+                        placeholder="https://suaempresa.com.br"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Endereço da Sede & Expedição */}
+                <div className="adm-editor-section">
+                  <h4 className="adm-section-title">
+                    <MapPin size={16} /> Endereço da Sede & Centro de Distribuição
+                  </h4>
+                  <div className="ck-form-grid">
+                    <div className="ck-field">
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>CEP da Sede *</span>
+                        {isSearchingCompanyCep && (
+                          <span style={{ fontSize: '11px', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Loader2 size={11} className="spin" /> Buscando nos Correios...
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        className="input-field"
+                        value={companyForm.cep || ''}
+                        onChange={e => handleCompanyCepChange(e.target.value)}
+                        placeholder="00000-000"
+                        maxLength={9}
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>País</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.pais || 'Brasil'}
+                        onChange={e => setCompanyForm({ ...companyForm, pais: e.target.value })}
+                        placeholder="Brasil"
+                      />
+                    </div>
+                    <div className="ck-field ck-field-full">
+                      <label>Logradouro / Endereço *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.endereco || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, endereco: e.target.value })}
+                        placeholder="Ex: Av. Paulista ou CLSW 304 Bloco A"
+                        required
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Número *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.numero || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, numero: e.target.value })}
+                        placeholder="Ex: 108 ou S/N"
+                        required
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Complemento</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.complemento || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, complemento: e.target.value })}
+                        placeholder="Ex: Sala 108, Andar 2, Galpão B"
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Bairro *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.bairro || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, bairro: e.target.value })}
+                        placeholder="Ex: Sudoeste ou Centro"
+                        required
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Cidade *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.cidade || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, cidade: e.target.value })}
+                        placeholder="Ex: Brasília"
+                        required
+                      />
+                    </div>
+                    <div className="ck-field">
+                      <label>Estado (UF) *</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.estado || ''}
+                        onChange={e => setCompanyForm({ ...companyForm, estado: e.target.value.toUpperCase().slice(0, 2) })}
+                        placeholder="DF"
+                        maxLength={2}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Identidade Visual & Logotipo */}
+                <div className="adm-editor-section">
+                  <h4 className="adm-section-title">
+                    <ImageIcon size={16} /> Identidade Visual & Logotipo da Loja
+                  </h4>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                    {/* Área de Upload e Prévia da Logo */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                      gap: 'var(--space-4)',
+                      alignItems: 'start'
+                    }}>
+                      {/* Box de Prévia */}
+                      <div style={{
+                        padding: 'var(--space-4)',
+                        border: '1px solid var(--dark-200)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: '#f8fafc',
+                        textAlign: 'center'
+                      }}>
+                        <span style={{ fontSize: '11px', color: 'var(--dark-500)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                          PRÉVIA ATUAL DA LOGO
+                        </span>
+                        
+                        <div style={{
+                          minHeight: '90px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: '#090e1a',
+                          borderRadius: '8px',
+                          padding: '16px',
+                          marginBottom: '10px'
+                        }}>
+                          {logoPreview ? (
+                            <img
+                              src={logoPreview}
+                              alt={companyForm.logoAlt || 'Logo da Empresa'}
+                              style={{
+                                maxHeight: '56px',
+                                maxWidth: '100%',
+                                objectFit: 'contain'
+                              }}
+                            />
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>
+                              Nenhuma logo enviada (exibindo nome em texto)
+                            </span>
+                          )}
+                        </div>
+
+                        {logoPreview && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={handleRemoveCompanyLogo}
+                            style={{ color: 'var(--red)', fontSize: '12px' }}
+                          >
+                            <Trash2 size={13} /> Remover Logo Atual
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Box de Envio de Arquivo */}
+                      <div style={{
+                        padding: 'var(--space-4)',
+                        border: '2px dashed var(--dark-200)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: '#ffffff',
+                        textAlign: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}>
+                        <Upload size={28} style={{ color: 'var(--dark-400)' }} />
+                        <strong style={{ fontSize: '13px', color: 'var(--dark-800)' }}>
+                          Enviar Nova Logo
+                        </strong>
+                        <p style={{ fontSize: '11px', color: 'var(--dark-500)', margin: 0, maxWidth: '240px' }}>
+                          Aceita formatos <strong>PNG, JPG, JPEG ou WEBP</strong> de até <strong>2 MB</strong>.
+                        </p>
+
+                        <label
+                          className="btn btn-outline btn-sm"
+                          style={{ cursor: 'pointer', marginTop: '4px' }}
+                        >
+                          <span>Selecionar Arquivo</span>
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/jpg, image/webp"
+                            onChange={handleCompanyLogoUpload}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+
+                        {logoError && (
+                          <span style={{ color: 'var(--red)', fontSize: '11px', fontWeight: 600, marginTop: '4px' }}>
+                            ⚠️ {logoError}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="ck-form-grid">
+                      <div className="ck-field">
+                        <label>Texto Alternativo da Logo (SEO & Acessibilidade)</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.logoAlt || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, logoAlt: e.target.value })}
+                          placeholder="Ex: Minha Loja - Variedades e Tecnologia"
+                        />
+                      </div>
+                      <div className="ck-field">
+                        <label>Caminho ou URL do Favicon (Ícone do Navegador)</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.favicon || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, favicon: e.target.value })}
+                          placeholder="/favicon.jpg"
+                        />
+                      </div>
+                      <div className="ck-field ck-field-full">
+                        <label>Descrição Curta da Empresa (Meta Description & SEO)</label>
+                        <textarea
+                          className="input-field"
+                          rows={2}
+                          value={companyForm.descricaoCurta || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, descricaoCurta: e.target.value })}
+                          placeholder="Breve resumo da loja exibido nas buscas do Google e no rodapé."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ações de Salvamento */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: 'var(--space-4)' }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-lg"
+                    disabled={isSavingCompany}
+                    style={{ minWidth: '220px' }}
+                  >
+                    {isSavingCompany ? (
+                      <>
+                        <Loader2 size={16} className="spin" />
+                        <span>Salvando e Atualizando Loja...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={18} />
+                        <span>Salvar Dados da Empresa</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 

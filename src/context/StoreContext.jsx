@@ -14,6 +14,7 @@ import {
   saveStoreSettingToDb
 } from '../services/supabaseService'
 import { isSupabaseConfigured } from '../services/supabaseClient'
+import { DEFAULT_COMPANY_DATA, getCompanyPublicName } from '../services/companyService'
 
 const StoreContext = createContext()
 
@@ -217,6 +218,96 @@ export function StoreProvider({ children }) {
   const [showCepModal, setShowCepModal] = useState(false)
   const [sortBy, setSortBy] = useState('relevance') // 'relevance' | 'price_asc' | 'price_desc' | 'sold' | 'rating'
   const [priceFilter, setPriceFilter] = useState('all') // 'all' | 'under300' | '300to1000' | '1000to3000' | 'above3000'
+
+  // === Dados Corporativos da Empresa (Multi-Marca) ===
+  const [companyData, setCompanyData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('infodesk_company_data')
+      return saved ? { ...DEFAULT_COMPANY_DATA, ...JSON.parse(saved) } : DEFAULT_COMPANY_DATA
+    } catch {
+      return DEFAULT_COMPANY_DATA
+    }
+  })
+
+  // Sincroniza dados da empresa do backend ao iniciar
+  useEffect(() => {
+    fetch('/api/company/config')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setCompanyData(prev => {
+            const merged = { ...prev, ...res.data }
+            try {
+              localStorage.setItem('infodesk_company_data', JSON.stringify(merged))
+            } catch {}
+            return merged
+          })
+        }
+      })
+      .catch(err => console.warn('[StoreContext] Aviso ao buscar dados da empresa:', err))
+  }, [])
+
+  // Atualiza título, favicon e meta description da página em tempo real
+  useEffect(() => {
+    const publicName = getCompanyPublicName(companyData)
+    if (publicName) {
+      document.title = `${publicName} — Tudo o que você precisa em um só lugar`
+    }
+
+    if (companyData.descricaoCurta) {
+      const metaDesc = document.querySelector('meta[name="description"]')
+      if (metaDesc) {
+        metaDesc.setAttribute('content', `${publicName} — ${companyData.descricaoCurta}`)
+      }
+    }
+
+    if (companyData.favicon) {
+      let linkIcon = document.querySelector("link[rel~='icon']")
+      if (!linkIcon) {
+        linkIcon = document.createElement('link')
+        linkIcon.rel = 'icon'
+        document.head.appendChild(linkIcon)
+      }
+      linkIcon.href = companyData.favicon
+    }
+  }, [companyData])
+
+  // Função para salvar e atualizar os dados da empresa
+  const updateCompanyData = useCallback(async (newData) => {
+    // Atualização otimista imediata na UI e cache local
+    setCompanyData(prev => {
+      const updated = { ...prev, ...newData }
+      try {
+        localStorage.setItem('infodesk_company_data', JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
+
+    try {
+      const res = await fetch('/api/company/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': adminSession?.token ? `Bearer ${adminSession.token}` : 'admin'
+        },
+        body: JSON.stringify({
+          ...newData,
+          isAdmin: true
+        })
+      })
+      const data = await res.json()
+      if (data.success && data.data) {
+        setCompanyData(data.data)
+        try {
+          localStorage.setItem('infodesk_company_data', JSON.stringify(data.data))
+        } catch {}
+        return { success: true, data: data.data }
+      }
+      return { success: false, error: data.error || 'Erro ao salvar dados.' }
+    } catch (err) {
+      return { success: false, error: 'Erro de conexão ao salvar dados da empresa.' }
+    }
+  }, [adminSession])
 
   // === Persist ===
   useEffect(() => {
@@ -745,6 +836,8 @@ export function StoreProvider({ children }) {
     showTrackingModal, setShowTrackingModal,
     trackingCodeToView, setTrackingCodeToView,
     openTrackingModal,
+    // Dados Corporativos da Empresa (Multi-Marca)
+    companyData, setCompanyData, updateCompanyData,
   }
 
   return (

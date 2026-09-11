@@ -1,8 +1,11 @@
 import React, { useEffect, useRef } from 'react'
 import { X, Printer, Truck, Package, Shield, FileText, CheckCircle2, QrCode } from 'lucide-react'
 import { formatCep, formatCpf } from '../services/correiosService'
+import { useStore } from '../context/StoreContext'
+import { getCompanyPublicName } from '../services/companyService'
 
 export default function ShippingLabelModal({ order, onClose }) {
+  const { companyData } = useStore()
   const printRef = useRef(null)
 
   // Suporte a fechar pelo ESC
@@ -134,8 +137,12 @@ export default function ShippingLabelModal({ order, onClose }) {
             {/* REMETENTE */}
             <div style={{ padding: '10px', borderTop: '1px solid #000', fontSize: '11px', color: '#333' }}>
               <span style={{ fontWeight: 900, display: 'block', textTransform: 'uppercase' }}>REMETENTE:</span>
-              <strong style={{ fontSize: '12px', color: '#000' }}>INFODESK INFORMÁTICA</strong> · CNPJ: 15.266.716/0001-02<br />
-              CLSW 304 Bloco A Sala 108 - Sudoeste · Brasília - DF · <strong>CEP: 70.673-631</strong>
+              <strong style={{ fontSize: '12px', color: '#000' }}>
+                {(companyData?.razaoSocial || companyData?.nomeFantasia || 'INFODESK INFORMÁTICA').toUpperCase()}
+              </strong>
+              {companyData?.cnpj ? ` · CNPJ: ${companyData.cnpj}` : ''}<br />
+              {companyData?.logradouro ? `${companyData.logradouro}${companyData.numero ? `, ${companyData.numero}` : ''}${companyData.complemento ? ` - ${companyData.complemento}` : ''}${companyData.bairro ? ` - ${companyData.bairro}` : ''} · ${companyData.cidade || ''} - ${companyData.estado || ''} · ` : 'CLSW 304 Bloco A Sala 108 - Sudoeste · Brasília - DF · '}
+              <strong>CEP: {companyData?.cep || '70.673-631'}</strong>
             </div>
           </div>
 
@@ -156,10 +163,10 @@ export default function ShippingLabelModal({ order, onClose }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '11px', borderBottom: '1px solid #000', paddingBottom: '10px', marginBottom: '10px' }}>
               <div>
                 <strong>REMETENTE:</strong><br />
-                Nome: Infodesk Informática<br />
-                Endereço: CLSW 304 Bloco A Sala 108 - Sudoeste<br />
-                Cidade/UF: Brasília - DF · CEP: 70.673-631<br />
-                CNPJ: 15.266.716/0001-02
+                Nome: {companyData?.razaoSocial || companyData?.nomeFantasia || 'Infodesk Informática'}<br />
+                Endereço: {companyData?.logradouro ? `${companyData.logradouro}${companyData.numero ? `, ${companyData.numero}` : ''}${companyData.complemento ? ` - ${companyData.complemento}` : ''}${companyData.bairro ? ` - ${companyData.bairro}` : ''}` : 'CLSW 304 Bloco A Sala 108 - Sudoeste'}<br />
+                Cidade/UF: {companyData?.cidade ? `${companyData.cidade} - ${companyData.estado} · CEP: ${companyData.cep}` : 'Brasília - DF · CEP: 70.673-631'}<br />
+                CNPJ: {companyData?.cnpj || '15.266.716/0001-02'}
               </div>
               <div>
                 <strong>DESTINATÁRIO:</strong><br />

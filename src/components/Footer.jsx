@@ -2,6 +2,7 @@ import React, { useRef } from 'react'
 import { Truck, CreditCard, ShieldCheck, Headphones, Mail, Phone, MapPin } from 'lucide-react'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
+import { getCompanyPublicName, getCompanyFullAddress, getCompanyGoogleMapsUrl } from '../services/companyService'
 
 // Ícone oficial vetorial do WhatsApp
 function WhatsAppIcon({ size = 18, className = '' }) {
@@ -38,9 +39,17 @@ function VintagePhoneIcon({ size = 18, className = '' }) {
 }
 
 export default function Footer() {
-  const { isAdmin, setShowAdminLogin, setShowAdminDashboard } = useStore()
+  const { isAdmin, setShowAdminLogin, setShowAdminDashboard, companyData } = useStore()
   const clickCount = useRef(0)
   const clickTimer = useRef(null)
+
+  const publicName = getCompanyPublicName(companyData)
+  const fullAddress = getCompanyFullAddress(companyData)
+  const mapsUrl = getCompanyGoogleMapsUrl(companyData)
+
+  const rawWhatsapp = (companyData?.whatsapp || '61996272630').replace(/\D/g, '')
+  const whatsappUrl = `https://wa.me/55${rawWhatsapp}`
+  const contactEmail = companyData?.emailPrincipal || companyData?.emailAtendimento || 'lucas@infodesk.net.br'
 
   const handleSecretClick = () => {
     clickCount.current += 1
@@ -99,8 +108,18 @@ export default function Footer() {
         <div className="container">
           <div className="footer-grid">
             <div className="footer-brand">
-              <InfodeskLogo size={130} variant="light" />
-              <p>Tudo o que você e sua empresa precisam em um só lugar. Variedade completa, procedência garantida, frete rápido dos Correios e o melhor atendimento do Brasil.</p>
+              {companyData?.logo ? (
+                <img
+                  src={companyData.logo}
+                  alt={companyData?.logoAlt || publicName}
+                  style={{ maxHeight: '44px', maxWidth: '200px', objectFit: 'contain' }}
+                />
+              ) : (
+                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
+                  {publicName}
+                </span>
+              )}
+              <p>{companyData?.descricaoCurta || 'Tudo o que você e sua empresa precisam em um só lugar. Variedade completa, procedência garantida, frete rápido dos Correios e o melhor atendimento do Brasil.'}</p>
             </div>
             <div className="footer-links">
               <h4>Institucional</h4>
@@ -121,62 +140,72 @@ export default function Footer() {
               <h4>Fale Conosco</h4>
 
               {/* Telefone Fixo (Apenas exibição) */}
-              <div className="footer-contact-item footer-contact-static">
-                <span className="footer-contact-icon">
-                  <Phone size={16} />
-                </span>
-                <div className="footer-contact-text">
-                  <span className="footer-contact-label">Telefone Fixo</span>
-                  <strong>(61) 3033-5373</strong>
+              {companyData?.telefone && (
+                <div className="footer-contact-item footer-contact-static">
+                  <span className="footer-contact-icon">
+                    <Phone size={16} />
+                  </span>
+                  <div className="footer-contact-text">
+                    <span className="footer-contact-label">Telefone Fixo</span>
+                    <strong>{companyData.telefone}</strong>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* WhatsApp */}
-              <a
-                href="https://wa.me/5561996272630"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="footer-contact-item footer-contact-whatsapp"
-                title="Chamar no WhatsApp"
-              >
-                <span className="footer-contact-icon whatsapp">
-                  <WhatsAppIcon size={18} />
-                </span>
-                <div className="footer-contact-text">
-                  <span className="footer-contact-label">WhatsApp</span>
-                  <strong className="footer-wa-number">(61) 9 9627-2630</strong>
-                </div>
-              </a>
+              {companyData?.whatsapp && (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="footer-contact-item footer-contact-whatsapp"
+                  title="Chamar no WhatsApp"
+                >
+                  <span className="footer-contact-icon whatsapp">
+                    <WhatsAppIcon size={18} />
+                  </span>
+                  <div className="footer-contact-text">
+                    <span className="footer-contact-label">WhatsApp</span>
+                    <strong className="footer-wa-number">{companyData.whatsapp}</strong>
+                  </div>
+                </a>
+              )}
 
               {/* E-mail */}
-              <a href="mailto:lucas@infodesk.net.br" className="footer-contact-item" title="Enviar e-mail">
-                <span className="footer-contact-icon">
-                  <Mail size={16} />
-                </span>
-                <div className="footer-contact-text">
-                  <span className="footer-contact-label">E-mail</span>
-                  <span>lucas@infodesk.net.br</span>
-                </div>
-              </a>
+              {contactEmail && (
+                <a href={`mailto:${contactEmail}`} className="footer-contact-item" title="Enviar e-mail">
+                  <span className="footer-contact-icon">
+                    <Mail size={16} />
+                  </span>
+                  <div className="footer-contact-text">
+                    <span className="footer-contact-label">E-mail</span>
+                    <span>{contactEmail}</span>
+                  </div>
+                </a>
+              )}
             </div>
           </div>
           <div className="footer-bottom">
             <div className="footer-corporate-info" onClick={handleSecretClick} style={{ cursor: 'default' }}>
               <div className="footer-corp-line">
                 <p className="footer-corp-title">
-                  © {new Date().getFullYear()} <strong>Infodesk Informática</strong> — CNPJ 15.266.716/0001-02
+                  © {new Date().getFullYear()} <strong>{companyData?.razaoSocial || publicName}</strong>{companyData?.cnpj ? ` — CNPJ ${companyData.cnpj}` : ''}
                 </p>
-                <span className="footer-corp-sep hide-mobile">•</span>
-                <a
-                  href="https://www.google.com/maps/search/?api=1&query=CLSW+304+Bloco+A+Sala+108%2C+Sudoeste%2C+Bras%C3%ADlia+-+DF%2C+70673-631"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="footer-corp-address-link"
-                  title="Abrir endereço no Google Maps"
-                >
-                  <MapPin size={14} className="footer-corp-pin" />
-                  <span>CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília - DF · CEP 70.673-631</span>
-                </a>
+                {fullAddress && (
+                  <>
+                    <span className="footer-corp-sep hide-mobile">•</span>
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="footer-corp-address-link"
+                      title="Abrir endereço no Google Maps"
+                    >
+                      <MapPin size={14} className="footer-corp-pin" />
+                      <span>{fullAddress}</span>
+                    </a>
+                  </>
+                )}
               </div>
               <p className="footer-corp-sub">
                 Atendimento presencial e centro de distribuição com envios expressos para todo o território nacional.
