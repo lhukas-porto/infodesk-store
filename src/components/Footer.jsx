@@ -1,6 +1,5 @@
 import React, { useRef } from 'react'
 import { Truck, CreditCard, ShieldCheck, Headphones, Mail, Phone, MapPin } from 'lucide-react'
-import InfodeskLogo from '../assets/brand/InfodeskLogo'
 import { useStore } from '../context/StoreContext'
 import { getCompanyPublicName, getCompanyFullAddress, getCompanyGoogleMapsUrl } from '../services/companyService'
 
@@ -108,17 +107,7 @@ export default function Footer() {
         <div className="container">
           <div className="footer-grid">
             <div className="footer-brand">
-              {companyData?.logo ? (
-                <img
-                  src={companyData.logo}
-                  alt={companyData?.logoAlt || publicName}
-                  style={{ maxHeight: '44px', maxWidth: '200px', objectFit: 'contain' }}
-                />
-              ) : (
-                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
-                  {publicName}
-                </span>
-              )}
+              <h4 className="footer-brand-title">{publicName}</h4>
               <p>{companyData?.descricaoCurta || 'Tudo o que você e sua empresa precisam em um só lugar. Variedade completa, procedência garantida, frete rápido dos Correios e o melhor atendimento do Brasil.'}</p>
             </div>
             <div className="footer-links">
@@ -266,8 +255,16 @@ export default function Footer() {
         @media (min-width: 768px) {
           .footer-grid { grid-template-columns: 2fr 1fr 1fr 1.5fr; }
         }
+        .footer-brand-title {
+          color: var(--white);
+          font-size: var(--text-base);
+          font-weight: 700;
+          margin-bottom: var(--space-3);
+          font-family: var(--font-display);
+          letter-spacing: -0.2px;
+        }
         .footer-brand p {
-          margin-top: var(--space-3);
+          margin-top: 0;
           font-size: var(--text-sm);
           line-height: 1.6;
           max-width: 300px;
