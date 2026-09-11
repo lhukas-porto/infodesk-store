@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import initialProducts from '../data/initialProducts'
 import { calcCommercialSellPrice, calcCommercialOriginalPrice } from '../services/pricingService'
 import {
@@ -219,6 +219,229 @@ export function StoreProvider({ children }) {
   const [showCepModal, setShowCepModal] = useState(false)
   const [sortBy, setSortBy] = useState('relevance') // 'relevance' | 'price_asc' | 'price_desc' | 'sold' | 'rating'
   const [priceFilter, setPriceFilter] = useState('all') // 'all' | 'under300' | '300to1000' | '1000to3000' | 'above3000'
+
+  // === Suporte à Navegação pelo Botão Voltar do Navegador (Browser History) ===
+  const isSyncingFromHistoryRef = useRef(false)
+  const isInternalBackRef = useRef(false)
+
+  const activeModal = showCheckout
+    ? 'checkout'
+    : cartOpen
+    ? 'cart'
+    : selectedProduct
+    ? 'product'
+    : showAdminDashboard
+    ? 'admin'
+    : showCustomerAccount
+    ? 'minha-conta'
+    : showScanner
+    ? 'scanner'
+    : showTrackingModal
+    ? 'rastreio'
+    : showCepModal
+    ? 'cep'
+    : showAdminLogin
+    ? 'admin-login'
+    : null
+
+  const prevActiveModalRef = useRef(activeModal)
+
+  // 1. Monitora abertura e fechamento de modais na interface
+  useEffect(() => {
+    const prev = prevActiveModalRef.current
+    prevActiveModalRef.current = activeModal
+
+    // Se a alteração veio do botão voltar/avançar do navegador, não duplica history
+    if (isSyncingFromHistoryRef.current) return
+
+    // CASO 1: Um modal foi aberto (ou trocou para outro modal)
+    if (activeModal && activeModal !== prev) {
+      const currentHistoryModal = window.history.state?.modal
+      if (currentHistoryModal !== activeModal) {
+        const hash = activeModal === 'product' && selectedProduct
+          ? `#produto-${selectedProduct.id}`
+          : `#${activeModal}`
+
+        const state = {
+          modal: activeModal,
+          id: activeModal === 'product' ? selectedProduct?.id : null
+        }
+
+        window.history.pushState(state, '', hash)
+      }
+    }
+
+    // CASO 2: O modal foi fechado pelo botão X, ESC ou clique fora (voltou para null ou para modal anterior)
+    if (!activeModal && prev) {
+      if (window.history.state?.modal) {
+        isInternalBackRef.current = true
+        window.history.back()
+      }
+    } else if (activeModal && prev && activeModal !== prev) {
+      if (window.history.state?.modal === prev) {
+        isInternalBackRef.current = true
+        window.history.back()
+      }
+    }
+  }, [activeModal, selectedProduct])
+
+  // 2. Escuta o evento 'popstate' (Botão Voltar e Avançar do Navegador)
+  useEffect(() => {
+    const handlePopState = (e) => {
+      // Se foi um history.back() acionado internamente pelo botão X, ignora
+      if (isInternalBackRef.current) {
+        isInternalBackRef.current = false
+        return
+      }
+
+      isSyncingFromHistoryRef.current = true
+
+      const targetModal = e.state?.modal || null
+      const targetId = e.state?.id || null
+
+      if (!targetModal) {
+        // Voltou para a tela inicial da loja: fecha todos os modais abertos
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        try {
+          sessionStorage.removeItem('infodesk_admin_dashboard_open')
+        } catch {}
+      } else if (targetModal === 'product') {
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        if (targetId) {
+          const found = (products || []).find(p => p.id === targetId || p.ean === targetId)
+          if (found) setSelectedProduct(found)
+        }
+      } else if (targetModal === 'cart') {
+        setSelectedProduct(null)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        setCartOpen(true)
+      } else if (targetModal === 'checkout') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        setShowCheckout(true)
+      } else if (targetModal === 'admin') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        setShowAdminDashboardState(true)
+      } else if (targetModal === 'minha-conta') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        setShowCustomerAccount(true)
+      } else if (targetModal === 'scanner') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        setShowScanner(true)
+      } else if (targetModal === 'rastreio') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowCepModal(false)
+        setShowTrackingModal(true)
+      } else if (targetModal === 'cep') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowAdminLogin(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(true)
+      } else if (targetModal === 'admin-login') {
+        setSelectedProduct(null)
+        setCartOpen(false)
+        setShowCheckout(false)
+        setShowCustomerAccount(false)
+        setShowAdminDashboardState(false)
+        setShowScanner(false)
+        setShowTrackingModal(false)
+        setShowCepModal(false)
+        setShowAdminLogin(true)
+      }
+
+      setTimeout(() => {
+        isSyncingFromHistoryRef.current = false
+      }, 50)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [products])
+
+  // 3. Inicialização pelo Hash da URL na primeira carga
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash || hash === '#' || hash === '#products') return
+
+    if (hash.startsWith('#produto-')) {
+      const prodId = hash.replace('#produto-', '')
+      const found = (products || []).find(p => p.id === prodId || p.ean === prodId)
+      if (found) setSelectedProduct(found)
+    } else if (hash === '#carrinho') {
+      setCartOpen(true)
+    } else if (hash === '#checkout') {
+      setShowCheckout(true)
+    } else if (hash === '#admin' && isAdmin) {
+      setShowAdminDashboardState(true)
+    } else if (hash === '#minha-conta') {
+      setShowCustomerAccount(true)
+    } else if (hash === '#scanner') {
+      setShowScanner(true)
+    } else if (hash === '#rastreio') {
+      setShowTrackingModal(true)
+    } else if (hash === '#cep') {
+      setShowCepModal(true)
+    }
+  }, [products, isAdmin])
 
   // === Dados Corporativos da Empresa (Multi-Marca) ===
   const [companyData, setCompanyData] = useState(() => {
