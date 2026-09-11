@@ -378,7 +378,24 @@ export function StoreProvider({ children }) {
               setProducts(seeded)
             }
           } else {
-            setProducts(dbProducts)
+            // Mescla de segurança: preserva produtos locais pendentes (prod-xxx) para que nunca sumam no F5
+            setProducts(prev => {
+              const pendingLocal = (prev || []).filter(p => typeof p.id === 'string' && p.id.startsWith('prod-'))
+              if (pendingLocal.length > 0) {
+                // Sincroniza em segundo plano no Supabase
+                pendingLocal.forEach(p => {
+                  upsertProductToDb(p).then(saved => {
+                    if (saved && saved.id) {
+                      setProducts(curr => curr.map(item => item.id === p.id ? saved : item))
+                    }
+                  }).catch(() => {})
+                })
+                const existingEans = new Set(dbProducts.map(dp => dp.ean).filter(Boolean))
+                const toKeep = pendingLocal.filter(p => !p.ean || !existingEans.has(p.ean))
+                return [...toKeep, ...dbProducts]
+              }
+              return dbProducts
+            })
           }
         }
 

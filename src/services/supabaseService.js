@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient'
+import { supabase, isSupabaseConfigured } from './supabaseClient.js'
 
 // Conversores snake_case <-> camelCase para Produtos
 export function mapDbProductToApp(dbProd) {
@@ -36,13 +36,20 @@ export function mapDbProductToApp(dbProd) {
 
 export function mapAppProductToDb(appProd) {
   if (!appProd) return null
+
+  // Preserva especificações e dimensões dentro de specs JSONB
+  const specs = Array.isArray(appProd.specs) ? [...appProd.specs] : []
+  if (appProd.weight && !specs.some(s => s.label?.toLowerCase().includes('peso'))) {
+    specs.push({ label: 'Peso', value: `${appProd.weight}g` })
+  }
+
   return {
     name: appProd.name,
     brand: appProd.brand || '',
     category: appProd.category || 'Outros',
     description: appProd.description || '',
-    specs: appProd.specs || [],
-    images: appProd.images || [],
+    specs,
+    images: Array.isArray(appProd.images) ? appProd.images : [],
     cost_price: parseFloat(appProd.costPrice) || 0,
     tax_rate: parseFloat(appProd.taxRate) || 9.05,
     margin_rate: parseFloat(appProd.marginRate) || 30,
@@ -56,10 +63,6 @@ export function mapAppProductToDb(appProd) {
     sold: parseInt(appProd.sold) || 0,
     featured: Boolean(appProd.featured),
     ean: appProd.ean || '',
-    weight_g: parseInt(appProd.weight, 10) || 500,
-    length_cm: parseInt(appProd.length, 10) || 20,
-    width_cm: parseInt(appProd.width, 10) || 15,
-    height_cm: parseInt(appProd.height, 10) || 10,
     active: appProd.active !== false
   }
 }
@@ -88,17 +91,25 @@ export async function upsertProductToDb(product) {
   if (!isSupabaseConfigured || !supabase) return null
   try {
     const payload = mapAppProductToDb(product)
-    // Se o id for UUID válido, inclui no upsert
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(product.id)
+
+    let query
     if (isUuid) {
       payload.id = product.id
+      query = await supabase
+        .from('products')
+        .upsert(payload)
+        .select()
+        .single()
+    } else {
+      query = await supabase
+        .from('products')
+        .insert(payload)
+        .select()
+        .single()
     }
 
-    const { data, error } = await supabase
-      .from('products')
-      .upsert(payload)
-      .select()
-      .single()
+    const { data, error } = query
 
     if (error) {
       console.warn('Supabase: Erro ao salvar produto:', error.message)
