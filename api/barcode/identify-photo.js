@@ -80,8 +80,8 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
 }
 Se não for possível identificar um campo, deixe em branco ou vazio. Não insira blocos markdown extras além do JSON válido.`
 
-  // Tenta modelos em ordem de disponibilidade (Flash 1.5, Flash 2.5, Pro)
-  const models = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-1.5-pro']
+  // Tenta modelos em ordem de disponibilidade e suporte ativo
+  const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest']
   let lastError = null
 
   for (const model of models) {
@@ -120,7 +120,8 @@ Se não for possível identificar um campo, deixe em branco ou vazio. Não insir
         const json = await response.json()
         const textResponse = json?.candidates?.[0]?.content?.parts?.[0]?.text
         if (textResponse) {
-          const parsed = JSON.parse(textResponse.trim())
+          const cleanText = textResponse.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
+          const parsed = JSON.parse(cleanText)
           return { success: true, data: parsed, modelUsed: model }
         }
       } else {
