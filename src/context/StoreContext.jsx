@@ -581,10 +581,14 @@ export function StoreProvider({ children }) {
 
   const logoutAdmin = useCallback(() => {
     setAdminSession(null)
-    localStorage.removeItem('infodesk_admin_session')
+    try {
+      localStorage.removeItem('infodesk_admin_session')
+      sessionStorage.removeItem('infodesk_admin_dashboard_open')
+      sessionStorage.removeItem('infodesk_admin_session')
+    } catch {}
     setShowAdminDashboard(false)
-    showToast('Sessão administrativa encerrada com segurança.')
-  }, [showToast])
+    showToast('Sessão administrativa encerrada com segurança. 🔒')
+  }, [setShowAdminDashboard, showToast])
 
   const changeAdminPassword = useCallback((currentPassword, newPassword) => {
     const isCurrentValid = currentPassword === adminConfig.password ||

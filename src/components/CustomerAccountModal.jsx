@@ -857,11 +857,9 @@ export default function CustomerAccountModal() {
                         type="button"
                         className="btn btn-ghost btn-sm"
                         onClick={() => {
-                          if (window.confirm('Deseja realmente desconectar da sua conta de cliente?')) {
-                            logoutCustomer()
-                          }
+                          logoutCustomer()
                         }}
-                        style={{ color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        style={{ color: 'var(--red)', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
                         title="Desconectar e sair da sua conta"
                       >
                         <LogOut size={16} /> Desconectar da Conta

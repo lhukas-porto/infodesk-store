@@ -643,12 +643,10 @@ export default function AdminDashboard() {
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() => {
-                if (window.confirm('Deseja realmente encerrar a sessão de administrador?')) {
-                  logoutAdmin()
-                }
+                logoutAdmin()
               }}
-              style={{ color: 'var(--red)' }}
-              title="Desconectar a conta administrativa"
+              style={{ color: 'var(--red)', fontWeight: 600 }}
+              title="Desconectar e encerrar a sessão administrativa"
             >
               <LogOut size={16} /> Encerrar Sessão
             </button>
