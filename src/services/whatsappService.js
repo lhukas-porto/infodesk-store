@@ -102,10 +102,9 @@ export function buildCustomerOrderSupportMessage(order, companyData = null) {
   const storeName = companyData ? getCompanyPublicName(companyData) : STORE_NAME
   const pedidoId = order.id || ''
   const clienteNome = order.cliente?.nome || 'Cliente'
-  const total = (order.total || 0).toFixed(2).replace('.', ',')
 
-  let msg = `Olá, equipe *${storeName}*! Acabei de realizar o pedido *#${pedidoId}* no valor de *R$ ${total}*.\n\n`
-  msg += `Meu nome é *${clienteNome}*. Gostaria de confirmar o pedido e receber as atualizações de envio por aqui. Obrigado!`
+  let msg = `Olá, equipe *${storeName}*! Tudo bem? Meu nome é *${clienteNome}*.\n\n`
+  msg += `Gostaria de tirar uma dúvida sobre o meu pedido *#${pedidoId}*. Poderiam me ajudar?`
 
   return msg
 }

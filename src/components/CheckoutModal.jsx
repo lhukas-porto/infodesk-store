@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import {
   X, CreditCard, FileText, QrCode, ArrowLeft, CheckCircle, Copy,
-  MapPin, Loader2, CheckCircle2, AlertCircle, Sparkles, MessageCircle
+  MapPin, Loader2, CheckCircle2, AlertCircle, Sparkles, MessageCircle,
+  Truck, Mail
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import {
@@ -605,47 +606,95 @@ export default function CheckoutModal() {
                 </div>
               )}
 
-              {/* Canal de Atendimento e Acompanhamento no WhatsApp */}
+              {/* Informações de Acompanhamento e Notificações (Padrão Amazon) */}
               <div style={{
                 marginTop: 'var(--space-4)',
-                padding: 'var(--space-4)',
-                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                border: '1px solid #bbf7d0',
+                padding: '16px 20px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
                 borderRadius: 'var(--radius-lg)',
-                textAlign: 'center',
+                textAlign: 'left',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
-                gap: '8px'
+                gap: '12px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#15803d', fontWeight: 700, fontSize: 'var(--text-sm)' }}>
-                  <MessageCircle size={18} />
-                  <span>Acompanhe pelo WhatsApp</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: '#e0f2fe',
+                    color: '#0284c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: '2px'
+                  }}>
+                    <Mail size={16} />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '13px', color: '#0f172a', display: 'block' }}>
+                      Comprovante enviado por e-mail
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4, display: 'block' }}>
+                      Os detalhes do seu pedido foram registrados e encaminhados para <strong>{orderResult.cliente?.email || cliente.email || 'seu e-mail'}</strong>.
+                    </span>
+                  </div>
                 </div>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-600)', margin: 0, maxWidth: 360, lineHeight: 1.4 }}>
-                  Tire dúvidas sobre seu pedido, confirme seu pagamento ou receba atualizações de envio dos Correios diretamente no seu celular.
-                </p>
+
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: '#fef3c7',
+                    color: '#d97706',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: '2px'
+                  }}>
+                    <Truck size={16} />
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '13px', color: '#0f172a', display: 'block' }}>
+                      Rastreamento dos Correios ({orderResult.freteType || 'PAC'})
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4, display: 'block' }}>
+                      Assim que o pacote for despachado nos Correios, você poderá acompanhar cada etapa pelo menu <strong>Rastrear Pedido</strong>.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Canal de Atendimento e Suporte Humano Opcional */}
+              <div style={{
+                marginTop: 'var(--space-3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                color: '#64748b'
+              }}>
+                <span>Precisa de ajuda com este pedido?</span>
                 <a
                   href={createWhatsAppLink(companyData?.whatsapp || '61996272630', buildCustomerOrderSupportMessage(orderResult, companyData))}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn btn-sm"
                   style={{
-                    background: '#25D366',
-                    color: '#ffffff',
-                    border: 'none',
+                    color: '#16a34a',
+                    fontWeight: 700,
+                    textDecoration: 'none',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 700,
-                    padding: '8px 18px',
-                    borderRadius: '8px',
-                    textDecoration: 'none',
-                    marginTop: '2px',
-                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.25)'
+                    gap: '4px'
                   }}
+                  title="Falar com nosso atendimento"
                 >
-                  <MessageCircle size={15} /> Notificar no WhatsApp da Loja
+                  <MessageCircle size={14} /> Fale com nosso suporte
                 </a>
               </div>
 
