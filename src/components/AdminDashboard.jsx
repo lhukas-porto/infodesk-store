@@ -136,6 +136,7 @@ export default function AdminDashboard() {
   const [companyForm, setCompanyForm] = useState(companyData || {})
   const [isSavingCompany, setIsSavingCompany] = useState(false)
   const [logoPreview, setLogoPreview] = useState(companyData?.logo || '')
+  const [logoBgMode, setLogoBgMode] = useState('neutral') // 'neutral' | 'light' | 'dark'
   const [logoError, setLogoError] = useState('')
   const [isSearchingCompanyCep, setIsSearchingCompanyCep] = useState(false)
 
@@ -1824,35 +1825,102 @@ export default function AdminDashboard() {
                         padding: 'var(--space-4)',
                         border: '1px solid var(--dark-200)',
                         borderRadius: 'var(--radius-lg)',
-                        background: '#f8fafc',
+                        background: '#ffffff',
                         textAlign: 'center'
                       }}>
-                        <span style={{ fontSize: '11px', color: 'var(--dark-500)', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
-                          PRÉVIA ATUAL DA LOGO
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--dark-500)', fontWeight: 700, letterSpacing: '0.5px' }}>
+                            PRÉVIA DA LOGO
+                          </span>
+
+                          {/* Seletor de Fundo de Contraste */}
+                          <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '2px', borderRadius: '6px', gap: '2px' }}>
+                            <button
+                              type="button"
+                              onClick={() => setLogoBgMode('neutral')}
+                              title="Fundo Neutro / Transparente (Ideal para ver detalhes claros e escuros)"
+                              style={{
+                                border: 'none',
+                                background: logoBgMode === 'neutral' ? '#ffffff' : 'transparent',
+                                color: logoBgMode === 'neutral' ? '#0f172a' : '#64748b',
+                                boxShadow: logoBgMode === 'neutral' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🏁 Neutro
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setLogoBgMode('light')}
+                              title="Fundo Branco / Claro"
+                              style={{
+                                border: 'none',
+                                background: logoBgMode === 'light' ? '#ffffff' : 'transparent',
+                                color: logoBgMode === 'light' ? '#0f172a' : '#64748b',
+                                boxShadow: logoBgMode === 'light' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ☀️ Claro
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setLogoBgMode('dark')}
+                              title="Fundo Escuro (Simula o Cabeçalho da Loja)"
+                              style={{
+                                border: 'none',
+                                background: logoBgMode === 'dark' ? '#0f172a' : 'transparent',
+                                color: logoBgMode === 'dark' ? '#ffffff' : '#64748b',
+                                boxShadow: logoBgMode === 'dark' ? '0 1px 3px rgba(0,0,0,0.25)' : 'none',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🌙 Escuro
+                            </button>
+                          </div>
+                        </div>
                         
                         <div style={{
-                          minHeight: '90px',
+                          minHeight: '100px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          background: '#090e1a',
+                          backgroundColor: logoBgMode === 'dark' ? '#0b1120' : (logoBgMode === 'light' ? '#ffffff' : '#f8fafc'),
+                          backgroundImage: logoBgMode === 'neutral'
+                            ? 'linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)'
+                            : 'none',
+                          backgroundSize: '16px 16px',
+                          backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
                           borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
                           padding: '16px',
-                          marginBottom: '10px'
+                          marginBottom: '10px',
+                          transition: 'background-color 0.2s ease'
                         }}>
                           {logoPreview ? (
                             <img
                               src={logoPreview}
                               alt={companyForm.logoAlt || 'Logo da Empresa'}
                               style={{
-                                maxHeight: '56px',
+                                maxHeight: '60px',
                                 maxWidth: '100%',
                                 objectFit: 'contain'
                               }}
                             />
                           ) : (
-                            <span style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>
+                            <span style={{ color: '#64748b', fontSize: '12px', fontStyle: 'italic', fontWeight: 500 }}>
                               Nenhuma logo enviada (exibindo nome em texto)
                             </span>
                           )}
