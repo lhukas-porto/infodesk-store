@@ -85,6 +85,28 @@ function correiosApiPlugin() {
             return
           }
         }
+        if (url === '/api/barcode/identify-photo') {
+          try {
+            const { default: handler } = await import('./api/barcode/identify-photo.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/barcode/identify-photo:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
+        if (url === '/api/barcode/confirm-match') {
+          try {
+            const { default: handler } = await import('./api/barcode/confirm-match.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/barcode/confirm-match:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
         next()
       })
     }

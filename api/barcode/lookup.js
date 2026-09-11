@@ -426,6 +426,104 @@ async function queryOpenFoodFacts(cleanGtin, gtin14) {
   return null
 }
 
+// Função Core reutilizável para busca estrita de GTIN
+export async function lookupGtinStrict(rawEan) {
+  const validation = normalizeAndValidateGtin(rawEan)
+  if (!validation.valid) {
+    return {
+      success: false,
+      error: validation.error || 'Código GTIN/EAN inválido.'
+    }
+  }
+
+  const { clean, gtin14 } = validation
+
+  // 1. Cache em memória
+  if (CONFIRMED_GTIN_CACHE.has(gtin14)) {
+    return {
+      success: true,
+      found: true,
+      ean: clean,
+      gtin14,
+      data: CONFIRMED_GTIN_CACHE.get(gtin14)
+    }
+  }
+
+  // 2. Catálogo interno confirmado
+  if (VERIFIED_CATALOG_DATABASE[gtin14]) {
+    const item = {
+      ...VERIFIED_CATALOG_DATABASE[gtin14],
+      gtin: clean,
+      queriedAt: new Date().toISOString()
+    }
+    CONFIRMED_GTIN_CACHE.set(gtin14, item)
+    return {
+      success: true,
+      found: true,
+      ean: clean,
+      gtin14,
+      data: item
+    }
+  }
+
+  try {
+    // 3. Bluesoft Cosmos
+    const cosmosResult = await queryCosmosApi(clean, gtin14)
+    if (cosmosResult) {
+      CONFIRMED_GTIN_CACHE.set(gtin14, cosmosResult)
+      return {
+        success: true,
+        found: true,
+        ean: clean,
+        gtin14,
+        data: cosmosResult
+      }
+    }
+
+    // 4. UPCitemdb
+    const upcResult = await queryUpcItemDb(clean, gtin14)
+    if (upcResult) {
+      CONFIRMED_GTIN_CACHE.set(gtin14, upcResult)
+      return {
+        success: true,
+        found: true,
+        ean: clean,
+        gtin14,
+        data: upcResult
+      }
+    }
+
+    // 5. Open Food Facts
+    const offResult = await queryOpenFoodFacts(clean, gtin14)
+    if (offResult) {
+      CONFIRMED_GTIN_CACHE.set(gtin14, offResult)
+      return {
+        success: true,
+        found: true,
+        ean: clean,
+        gtin14,
+        data: offResult
+      }
+    }
+
+    // 6. Não identificado
+    return {
+      success: true,
+      found: false,
+      ean: clean,
+      gtin14,
+      message: 'Produto não identificado',
+      queriedAt: new Date().toISOString()
+    }
+  } catch (err) {
+    console.error('Erro na consulta de GTIN:', err)
+    return {
+      success: false,
+      error: 'Erro interno ao consultar base de código de barras na internet.'
+    }
+  }
+}
+
 // Handler Principal de Execução da API
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -452,115 +550,13 @@ export default async function handler(req, res) {
     rawEan = body?.ean || body?.code || body?.gtin || ''
   }
 
-  // 1. Validação e Normalização GTIN
-  const validation = normalizeAndValidateGtin(rawEan)
-  if (!validation.valid) {
+  const result = await lookupGtinStrict(rawEan)
+  if (!result.success && result.error) {
     res.statusCode = 400
-    res.end(JSON.stringify({
-      success: false,
-      error: validation.error || 'Código GTIN/EAN inválido.'
-    }))
+    res.end(JSON.stringify(result))
     return
   }
 
-  const { clean, gtin14 } = validation
-
-  // 2. Consulta no Cache Confirmado em Memória
-  if (CONFIRMED_GTIN_CACHE.has(gtin14)) {
-    const cachedItem = CONFIRMED_GTIN_CACHE.get(gtin14)
-    res.statusCode = 200
-    res.end(JSON.stringify({
-      success: true,
-      found: true,
-      ean: clean,
-      gtin14,
-      data: cachedItem
-    }))
-    return
-  }
-
-  // 3. Consulta no Catálogo Interno de Alta Fidelidade (Correspondência Exata GTIN-14)
-  if (VERIFIED_CATALOG_DATABASE[gtin14]) {
-    const item = {
-      ...VERIFIED_CATALOG_DATABASE[gtin14],
-      gtin: clean, // Preserva código original lido
-      queriedAt: new Date().toISOString()
-    }
-    CONFIRMED_GTIN_CACHE.set(gtin14, item)
-
-    res.statusCode = 200
-    res.end(JSON.stringify({
-      success: true,
-      found: true,
-      ean: clean,
-      gtin14,
-      data: item
-    }))
-    return
-  }
-
-  try {
-    // 4. Consulta na Bluesoft Cosmos API (se token configurado)
-    const cosmosResult = await queryCosmosApi(clean, gtin14)
-    if (cosmosResult) {
-      CONFIRMED_GTIN_CACHE.set(gtin14, cosmosResult)
-      res.statusCode = 200
-      res.end(JSON.stringify({
-        success: true,
-        found: true,
-        ean: clean,
-        gtin14,
-        data: cosmosResult
-      }))
-      return
-    }
-
-    // 5. Consulta na UPCitemdb API
-    const upcResult = await queryUpcItemDb(clean, gtin14)
-    if (upcResult) {
-      CONFIRMED_GTIN_CACHE.set(gtin14, upcResult)
-      res.statusCode = 200
-      res.end(JSON.stringify({
-        success: true,
-        found: true,
-        ean: clean,
-        gtin14,
-        data: upcResult
-      }))
-      return
-    }
-
-    // 6. Consulta no Open Food Facts (Fallback Estrito)
-    const offResult = await queryOpenFoodFacts(clean, gtin14)
-    if (offResult) {
-      CONFIRMED_GTIN_CACHE.set(gtin14, offResult)
-      res.statusCode = 200
-      res.end(JSON.stringify({
-        success: true,
-        found: true,
-        ean: clean,
-        gtin14,
-        data: offResult
-      }))
-      return
-    }
-
-    // 7. Produto NÃO identificado em nenhuma fonte (NUNCA aproximar ou inventar)
-    res.statusCode = 200
-    res.end(JSON.stringify({
-      success: true,
-      found: false,
-      ean: clean,
-      gtin14,
-      message: 'Produto não identificado',
-      queriedAt: new Date().toISOString()
-    }))
-  } catch (err) {
-    console.error('Erro na consulta de GTIN:', err)
-    res.statusCode = 500
-    res.end(JSON.stringify({
-      success: false,
-      error: 'Erro interno ao consultar base de código de barras na internet.'
-    }))
-  }
+  res.statusCode = 200
+  res.end(JSON.stringify(result))
 }

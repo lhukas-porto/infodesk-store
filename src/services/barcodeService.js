@@ -169,3 +169,90 @@ export async function fetchProductByBarcode(ean) {
     }
   }
 }
+
+// Otimiza, redimensiona e comprime imagem no cliente mantendo nitidez de textos
+export async function optimizeImageForAnalysis(imageSource, maxDimension = 1280) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      let { width, height } = img
+
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width)
+          width = maxDimension
+        } else {
+          width = Math.round((width * maxDimension) / height)
+          height = maxDimension
+        }
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      // Renderização com alta nitidez
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // Retorna em JPEG com compressão equilibrada (88% de qualidade)
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88)
+      resolve(dataUrl)
+    }
+    img.onerror = (err) => reject(new Error('Falha ao processar arquivo de imagem.'))
+
+    if (typeof imageSource === 'string') {
+      img.src = imageSource
+    } else if (imageSource instanceof Blob || imageSource instanceof File) {
+      const reader = new FileReader()
+      reader.onload = (e) => { img.src = e.target.result }
+      reader.onerror = (e) => reject(new Error('Falha ao ler arquivo.'))
+      reader.readAsDataURL(imageSource)
+    } else {
+      reject(new Error('Formato de imagem não suportado.'))
+    }
+  })
+}
+
+// Identifica produto por fotografia no backend inteligente
+export async function identifyProductByPhoto(imageSource) {
+  try {
+    const optimizedImage = await optimizeImageForAnalysis(imageSource)
+
+    const res = await fetch('/api/barcode/identify-photo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ image: optimizedImage })
+    })
+
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.error('Erro na identificação por fotografia:', err)
+    return {
+      success: false,
+      error: 'Não foi possível conectar ao serviço de reconhecimento visual. Verifique sua conexão de internet.'
+    }
+  }
+}
+
+// Salva correspondência confirmada no histórico de aprendizado
+export async function confirmProductPhotoMatch(matchData) {
+  try {
+    const res = await fetch('/api/barcode/confirm-match', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(matchData)
+    })
+    return await res.json()
+  } catch (err) {
+    console.warn('Erro ao registrar confirmação:', err)
+    return { success: false, error: err.message }
+  }
+}
