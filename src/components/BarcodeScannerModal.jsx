@@ -105,6 +105,7 @@ export default function BarcodeScannerModal() {
   const [manualSearched, setManualSearched] = useState(false)
   const [isBarcodeSearching, setIsBarcodeSearching] = useState(false)
   const [webProductResult, setWebProductResult] = useState(null)
+  const [webNotFound, setWebNotFound] = useState(null)
 
   // Barcode / Label generation state
   const [generatedEan, setGeneratedEan] = useState('')
@@ -377,6 +378,7 @@ export default function BarcodeScannerModal() {
 
     setIsBarcodeSearching(true)
     setWebProductResult(null)
+    setWebNotFound(null)
     setManualSearched(true)
     setManualEan(clean)
 
@@ -389,15 +391,25 @@ export default function BarcodeScannerModal() {
     try {
       // 2. Consulta a base online de produtos na internet
       const res = await fetchProductByBarcode(cleanDigits)
-      if (res.success && res.product) {
+      if (res.success && res.found && res.product) {
         playAudioBeep()
         setWebProductResult(res.product)
+        setWebNotFound(null)
         showToast(`Produto "${res.product.name}" identificado na internet! 🌐🎯`)
+      } else if (res.success && !res.found) {
+        playAudioBeep()
+        setWebProductResult(null)
+        setWebNotFound({ ean: cleanDigits, message: res.message })
+        showToast(`Código EAN ${cleanDigits} lido com sucesso! 🏷️`)
       } else {
+        setWebProductResult(null)
+        setWebNotFound({ ean: cleanDigits, message: res.error || 'Não localizado no catálogo global online.' })
         showToast('Código processado com sucesso.')
       }
     } catch (err) {
       console.error('Erro na consulta online por código:', err)
+      setWebProductResult(null)
+      setWebNotFound({ ean: cleanDigits, message: 'Falha temporária de conexão com a base de dados.' })
       showToast('Não foi possível conectar à base global de códigos de barras.')
     } finally {
       setIsBarcodeSearching(false)
@@ -835,6 +847,90 @@ export default function BarcodeScannerModal() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quando o código foi lido com sucesso mas não indexado no catálogo online */}
+              {webNotFound && !isBarcodeSearching && !webProductResult && (
+                <div className="bcs-not-found-card" style={{
+                  marginTop: 'var(--space-4)',
+                  padding: 'var(--space-6)',
+                  background: 'var(--dark-900)',
+                  border: '1px solid var(--dark-700)',
+                  borderRadius: 'var(--radius-lg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-4)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: '50%',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      color: '#38bdf8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 22,
+                      flexShrink: 0
+                    }}>
+                      🏷️
+                    </div>
+                    <div>
+                      <h4 style={{ color: 'var(--white)', margin: 0, fontSize: 16 }}>
+                        Código de Barras Lido: <code>{webNotFound.ean}</code>
+                      </h4>
+                      <p style={{ color: 'var(--dark-400)', margin: '4px 0 0', fontSize: 13, lineHeight: 1.4 }}>
+                        {detectedProduct ? (
+                          <span style={{ color: '#4ade80' }}>
+                            ✓ Este código já pertence ao produto <strong>"{detectedProduct.name}"</strong> no seu estoque ({detectedProduct.stock} un disponíveis).
+                          </span>
+                        ) : (
+                          'O código foi lido com precisão, mas ainda não possui cadastro nas bases públicas abertas da internet. Você pode cadastrá-lo na sua loja agora mesmo!'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setGeneratedEan(webNotFound.ean)
+                        setCustomProduct({
+                          name: detectedProduct?.name || '',
+                          brand: detectedProduct?.brand || '',
+                          category: detectedProduct?.category || 'Hardware',
+                          price: detectedProduct?.price || '',
+                          costPrice: detectedProduct?.costPrice || '',
+                          stock: detectedProduct?.stock || 1
+                        })
+                        setActiveTab('label')
+                      }}
+                    >
+                      <Plus size={16} /> {detectedProduct ? 'Editar / Atualizar Etiqueta' : 'Cadastrar Produto com este EAN'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => {
+                        setGeneratedEan(webNotFound.ean)
+                        setCustomProduct({
+                          name: detectedProduct?.name || 'PRODUTO NOVO',
+                          brand: detectedProduct?.brand || 'INFODESK',
+                          category: detectedProduct?.category || 'Hardware',
+                          price: detectedProduct?.price || 99.90,
+                          costPrice: detectedProduct?.costPrice || 69.90,
+                          stock: 1
+                        })
+                        setActiveTab('label')
+                      }}
+                    >
+                      <Printer size={16} /> Imprimir Etiqueta para este Código
+                    </button>
                   </div>
                 </div>
               )}

@@ -135,11 +135,15 @@ export async function fetchProductByBarcode(ean) {
     const res = await fetch(`/api/barcode/lookup?ean=${encodeURIComponent(cleanEan)}`)
     const data = await res.json()
     if (data.success && data.data) {
-      return { success: true, product: data.data, ean: cleanEan }
+      if (data.data.found === true) {
+        return { success: true, found: true, product: data.data, ean: cleanEan }
+      } else {
+        return { success: true, found: false, ean: cleanEan, message: data.data.message }
+      }
     }
-    return { success: false, error: data.error || 'Produto não encontrado na internet.' }
+    return { success: false, error: data.error || 'Produto não encontrado na internet.', ean: cleanEan }
   } catch (err) {
     console.error('Erro ao consultar código de barras na internet:', err)
-    return { success: false, error: 'Falha de conexão com a base de códigos de barras.' }
+    return { success: false, error: 'Falha de conexão com a base de códigos de barras.', ean: cleanEan }
   }
 }
