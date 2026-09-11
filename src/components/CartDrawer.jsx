@@ -130,7 +130,10 @@ export default function CartDrawer() {
             width: 80px;
             height: 80px;
             border-radius: var(--radius-lg);
-            object-fit: cover;
+            object-fit: contain;
+            background: #ffffff;
+            border: 1px solid var(--dark-100);
+            padding: 4px;
             flex-shrink: 0;
           }
           .cart-item-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }

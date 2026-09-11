@@ -1131,9 +1131,11 @@ export default function CustomerAccountModal() {
           .cust-item-thumb {
             width: 44px;
             height: 44px;
-            object-fit: cover;
+            object-fit: contain;
+            background: #ffffff;
             border-radius: var(--radius-md);
             border: 1px solid var(--dark-100);
+            padding: 2px;
           }
           .cust-tracking-box {
             display: flex;

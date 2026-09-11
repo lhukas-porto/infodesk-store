@@ -746,8 +746,10 @@ export default function Header() {
           width: 44px;
           height: 44px;
           border-radius: 8px;
-          object-fit: cover;
-          background: var(--dark-100);
+          object-fit: contain;
+          background: #ffffff;
+          border: 1px solid var(--dark-200);
+          padding: 2px;
           flex-shrink: 0;
         }
         .predictive-info {

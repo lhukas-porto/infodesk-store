@@ -825,7 +825,7 @@ export default function AdminDashboard() {
                               <img
                                 src={p.images?.[0] || 'https://via.placeholder.com/60'}
                                 alt=""
-                                style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', background: 'var(--dark-100)' }}
+                                style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'contain', background: '#ffffff', border: '1px solid var(--dark-200)', padding: 2 }}
                               />
                               <div>
                                 <strong style={{ fontSize: 'var(--text-sm)', display: 'block' }}>{p.name}</strong>
@@ -2604,7 +2604,7 @@ export default function AdminDashboard() {
           .adm-image-row .input-field { flex: 1; }
           .adm-img-preview {
             width: 42px; height: 42px; border-radius: var(--radius-md);
-            object-fit: cover; border: 1px solid var(--dark-200); flex-shrink: 0;
+            object-fit: contain; background: #ffffff; border: 1px solid var(--dark-200); padding: 2px; flex-shrink: 0;
           }
           .adm-spec-edit-row .input-field { flex: 1; }
           .adm-editor-actions { display: flex; justify-content: flex-end; margin-top: var(--space-3); }

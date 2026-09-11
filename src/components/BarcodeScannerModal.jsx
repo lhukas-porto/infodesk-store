@@ -1580,11 +1580,12 @@ export default function BarcodeScannerModal() {
           .bcs-candidate-thumb {
             width: 100px;
             height: 100px;
-            object-fit: cover;
+            object-fit: contain;
             border-radius: var(--radius-lg);
             border: 1px solid var(--dark-200);
             flex-shrink: 0;
-            background: var(--dark-50);
+            background: #ffffff;
+            padding: 4px;
           }
           .bcs-candidate-info {
             flex: 1;
@@ -1827,10 +1828,12 @@ export default function BarcodeScannerModal() {
           .bcs-web-thumb {
             width: 120px;
             height: 120px;
-            object-fit: cover;
+            object-fit: contain;
             border-radius: var(--radius-lg);
             border: 1px solid var(--dark-200);
             flex-shrink: 0;
+            background: #ffffff;
+            padding: 4px;
           }
           .bcs-web-info {
             flex: 1;

@@ -283,9 +283,13 @@ export default function ProductModal() {
             aspect-ratio: 1;
             border-radius: var(--radius-xl);
             overflow: hidden;
-            background: var(--dark-50);
+            background: #ffffff;
+            border: 1px solid var(--dark-100);
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
-          .pm-main-img img { width: 100%; height: 100%; object-fit: cover; }
+          .pm-main-img img { width: 100%; height: 100%; object-fit: contain; padding: var(--space-4); }
           .pm-nav {
             position: absolute;
             top: 50%;
@@ -301,25 +305,29 @@ export default function ProductModal() {
             justify-content: center;
             box-shadow: var(--shadow-md);
             transition: all var(--transition-fast);
+            z-index: 2;
           }
           .pm-nav:hover { background: var(--white); transform: translateY(-50%) scale(1.1); }
           .pm-nav-prev { left: var(--space-3); }
           .pm-nav-next { right: var(--space-3); }
-          .pm-discount { position: absolute; top: var(--space-3); left: var(--space-3); }
+          .pm-discount { position: absolute; top: var(--space-3); left: var(--space-3); z-index: 2; }
           .pm-thumbs { display: flex; gap: var(--space-2); }
           .pm-thumb {
             width: 64px;
             height: 64px;
             border-radius: var(--radius-md);
             overflow: hidden;
-            border: 2px solid transparent;
+            border: 1px solid var(--dark-200);
             cursor: pointer;
             transition: border-color var(--transition-fast);
-            padding: 0;
-            background: none;
+            padding: 2px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
-          .pm-thumb.active { border-color: var(--lime); }
-          .pm-thumb img { width: 100%; height: 100%; object-fit: cover; }
+          .pm-thumb.active { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime); }
+          .pm-thumb img { width: 100%; height: 100%; object-fit: contain; }
           .pm-details { display: flex; flex-direction: column; gap: var(--space-3); }
           .pm-title { font-size: var(--text-xl); }
           .pm-description { font-size: var(--text-sm); color: var(--dark-600); line-height: 1.6; }

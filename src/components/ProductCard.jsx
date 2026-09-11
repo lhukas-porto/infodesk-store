@@ -130,8 +130,11 @@ export default function ProductCard({ product }) {
           position: relative;
           aspect-ratio: 1;
           overflow: hidden;
-          background: var(--dark-50);
+          background: #ffffff;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .product-card-skeleton {
           position: absolute;
@@ -141,7 +144,8 @@ export default function ProductCard({ product }) {
         .product-card-img {
           width: 100%;
           height: 100%;
-          object-fit: cover;
+          object-fit: contain;
+          padding: var(--space-3);
           opacity: 0;
           transition: opacity 0.4s ease, transform 0.4s ease;
         }
