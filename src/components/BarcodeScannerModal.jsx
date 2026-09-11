@@ -92,7 +92,7 @@ const TECH_KNOWLEDGE_BASE = [
 ]
 
 export default function BarcodeScannerModal() {
-  const { showScanner, setShowScanner, addProduct, showToast, setShowAdminDashboard } = useStore()
+  const { showScanner, setShowScanner, products = [], addProduct, showToast, setShowAdminDashboard } = useStore()
 
   const [activeTab, setActiveTab] = useState('photo') // 'photo' | 'barcode' | 'label'
   const [scanning, setScanning] = useState(false)
@@ -100,6 +100,8 @@ export default function BarcodeScannerModal() {
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState(null)
   const [noMatchFound, setNoMatchFound] = useState(false)
+  const [detectedProduct, setDetectedProduct] = useState(null)
+  const [lastScannedCode, setLastScannedCode] = useState('')
 
   // Barcode / Label generation state
   const [generatedEan, setGeneratedEan] = useState('')
@@ -117,12 +119,48 @@ export default function BarcodeScannerModal() {
   const streamRef = useRef(null)
   const fileInputRef = useRef(null)
 
+  // Emite feedback sonoro ao ler código com sucesso
+  const playAudioBeep = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext
+      if (!AudioContext) return
+      const ctx = new AudioContext()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(1400, ctx.currentTime)
+      gain.gain.setValueAtTime(0.25, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.15)
+    } catch {}
+  }
+
+  // Desliga câmera e libera o hardware
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
       streamRef.current = null
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
     setScanning(false)
+  }
+
+  // Anexa o stream de vídeo ao elemento no momento em que ele for montado no DOM
+  const attachVideoStream = (element) => {
+    videoRef.current = element
+    if (element && streamRef.current) {
+      if (element.srcObject !== streamRef.current) {
+        element.srcObject = streamRef.current
+      }
+      element.play().catch(err => {
+        console.warn('Erro ao reproduzir vídeo:', err)
+      })
+    }
   }
 
   useEffect(() => {
@@ -131,21 +169,45 @@ export default function BarcodeScannerModal() {
     }
   }, [])
 
+  // Sincroniza stream com o elemento de vídeo ao alternar abas ou iniciar escaneamento
+  useEffect(() => {
+    if (scanning && streamRef.current && videoRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+      }
+      videoRef.current.play().catch(() => {})
+    }
+  }, [scanning, activeTab])
+
   // --- Camera Handlers ---
   const startCamera = async () => {
     try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop())
+        streamRef.current = null
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       })
       streamRef.current = stream
+      setScanning(true)
+
+      // Se o elemento de vídeo já existir, atribui de imediato
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        videoRef.current.play()
+        videoRef.current.play().catch(() => {})
       }
-      setScanning(true)
-      showToast('Câmera ativada! Aponte para o produto ou código de barras. 📸')
+
+      showToast('Câmera ativada! Enquadre o código de barras na mira. 📸')
     } catch (err) {
-      showToast('Câmera indisponível. Você pode carregar uma foto do produto!')
+      console.error('Erro ao acessar câmera:', err)
+      setScanning(false)
+      showToast('Não foi possível acessar a câmera. Verifique a permissão do seu navegador!')
     }
   }
 
@@ -273,6 +335,66 @@ export default function BarcodeScannerModal() {
     setShowAdminDashboard(true)
   }
 
+  // Trata código de barras detectado pela câmera
+  const handleBarcodeDetected = (code) => {
+    const clean = (code || '').trim()
+    if (!clean || clean === lastScannedCode) return
+
+    setLastScannedCode(clean)
+    setManualEan(clean)
+    playAudioBeep()
+
+    const cleanDigits = clean.replace(/\D/g, '')
+    const matched = (products || []).find(p => p.ean && p.ean.replace(/\D/g, '') === cleanDigits)
+    if (matched) {
+      setDetectedProduct(matched)
+      showToast(`Produto encontrado: "${matched.name}" (Estoque: ${matched.stock})! 🎯`)
+    } else {
+      setDetectedProduct(null)
+      showToast(`Código ${clean} lido com sucesso!`)
+    }
+  }
+
+  // Loop de detecção automática com BarcodeDetector nativo
+  useEffect(() => {
+    if (!scanning || activeTab !== 'barcode' || !showScanner) return
+
+    let isMounted = true
+    let intervalId = null
+    let detector = null
+
+    try {
+      if ('BarcodeDetector' in window) {
+        detector = new window.BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+        })
+      }
+    } catch (e) {
+      console.warn('BarcodeDetector API não disponível:', e)
+    }
+
+    const scanFrame = async () => {
+      if (!detector || !videoRef.current || videoRef.current.readyState < 2 || !isMounted) return
+      try {
+        const barcodes = await detector.detect(videoRef.current)
+        if (barcodes && barcodes.length > 0 && isMounted) {
+          handleBarcodeDetected(barcodes[0].rawValue)
+        }
+      } catch (err) {
+        // Ignora frames intermediários
+      }
+    }
+
+    if (detector) {
+      intervalId = setInterval(scanFrame, 300)
+    }
+
+    return () => {
+      isMounted = false
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [scanning, activeTab, showScanner, products, lastScannedCode])
+
   const close = () => {
     stopCamera()
     setShowScanner(false)
@@ -281,6 +403,8 @@ export default function BarcodeScannerModal() {
     setNoMatchFound(false)
     setGeneratedEan('')
     setManualEan('')
+    setDetectedProduct(null)
+    setLastScannedCode('')
   }
 
   // Suporte a fechar scanner com tecla ESC
@@ -351,7 +475,13 @@ export default function BarcodeScannerModal() {
               <div className="bcs-camera-box">
                 {scanning ? (
                   <div className="bcs-video-wrap">
-                    <video ref={videoRef} className="bcs-video" playsInline muted />
+                    <video
+                      ref={attachVideoStream}
+                      className="bcs-video"
+                      autoPlay
+                      playsInline
+                      muted
+                    />
                     <div className="bcs-camera-controls">
                       <button type="button" className="btn btn-primary" onClick={handleSnapPhoto}>
                         <Camera size={18} /> Capturar Foto Agora
@@ -480,7 +610,29 @@ export default function BarcodeScannerModal() {
               <div className="bcs-camera-box">
                 {scanning ? (
                   <div className="bcs-video-wrap">
-                    <video ref={videoRef} className="bcs-video" playsInline muted />
+                    <video
+                      ref={attachVideoStream}
+                      className="bcs-video"
+                      autoPlay
+                      playsInline
+                      muted
+                    />
+
+                    {/* Mira / Retículo de Leitura com Laser Animado */}
+                    <div className="bcs-scanner-overlay">
+                      <div className="bcs-target-box">
+                        <div className="bcs-target-corner bcs-target-corner-tl" />
+                        <div className="bcs-target-corner bcs-target-corner-tr" />
+                        <div className="bcs-target-corner bcs-target-corner-bl" />
+                        <div className="bcs-target-corner bcs-target-corner-br" />
+                        <div className="bcs-laser-line" />
+                      </div>
+                      <div className="bcs-target-guide">
+                        <span className="bcs-pulse-dot" />
+                        Aponte a linha vermelha sobre o código de barras
+                      </div>
+                    </div>
+
                     <div className="bcs-camera-controls">
                       <button type="button" className="btn btn-ghost btn-sm" onClick={stopCamera}>
                         Fechar Câmera
@@ -493,6 +645,30 @@ export default function BarcodeScannerModal() {
                   </button>
                 )}
               </div>
+
+              {/* Exibição do Produto se detectado no Estoque */}
+              {detectedProduct && (
+                <div className="bcs-detected-card">
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <img
+                      src={detectedProduct.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=200'}
+                      alt={detectedProduct.name}
+                      style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--dark-200)' }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <span className="badge badge-lime" style={{ fontSize: '10px', marginBottom: 2 }}>
+                        ✓ PRODUTO EM ESTOQUE
+                      </span>
+                      <strong style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--dark-900)' }}>
+                        {detectedProduct.name}
+                      </strong>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
+                        Preço: <strong>R$ {(detectedProduct.price || 0).toFixed(2).replace('.', ',')}</strong> | Estoque: <strong>{detectedProduct.stock} un</strong> | EAN: <code>{detectedProduct.ean}</code>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="bcs-manual-ean" style={{ marginTop: 'var(--space-4)' }}>
                 <label>Ou digite o Código EAN-13 manualmente:</label>
@@ -845,6 +1021,87 @@ export default function BarcodeScannerModal() {
             gap: 8px;
             background: var(--dark-50);
             padding: var(--space-4);
+            border-radius: var(--radius-xl);
+          }
+          /* Overlay de Mira e Laser do Scanner */
+          .bcs-scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 5;
+          }
+          .bcs-target-box {
+            width: 260px;
+            height: 120px;
+            border: 2px solid rgba(132, 204, 22, 0.7);
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+          }
+          .bcs-target-corner {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-color: #ef4444;
+            border-style: solid;
+          }
+          .bcs-target-corner-tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 8px; }
+          .bcs-target-corner-tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-top-right-radius: 8px; }
+          .bcs-target-corner-bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-bottom-left-radius: 8px; }
+          .bcs-target-corner-br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-bottom-right-radius: 8px; }
+          .bcs-laser-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ef4444, #f87171, #ef4444, transparent);
+            box-shadow: 0 0 8px #ef4444, 0 0 14px rgba(239, 68, 68, 0.8);
+            animation: scanLaser 1.8s infinite ease-in-out alternate;
+          }
+          @keyframes scanLaser {
+            0% { top: 12%; }
+            100% { top: 88%; }
+          }
+          .bcs-target-guide {
+            margin-top: 12px;
+            background: rgba(15, 23, 42, 0.85);
+            color: #ffffff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .bcs-pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+            animation: pulseDot 1s infinite alternate;
+          }
+          @keyframes pulseDot {
+            0% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1.2); }
+          }
+          .bcs-detected-card {
+            margin-top: var(--space-4);
+            padding: var(--space-4);
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
             border-radius: var(--radius-xl);
           }
         `}</style>
