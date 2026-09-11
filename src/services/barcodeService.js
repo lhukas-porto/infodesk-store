@@ -123,3 +123,23 @@ export function generateBarcodeLabelPDF({ product, ean, price }) {
 
   return doc
 }
+
+// Consulta dados do produto na internet pelo código de barras
+export async function fetchProductByBarcode(ean) {
+  const cleanEan = (ean || '').replace(/\D/g, '')
+  if (!cleanEan || cleanEan.length < 6) {
+    return { success: false, error: 'Código de barras inválido.' }
+  }
+
+  try {
+    const res = await fetch(`/api/barcode/lookup?ean=${encodeURIComponent(cleanEan)}`)
+    const data = await res.json()
+    if (data.success && data.data) {
+      return { success: true, product: data.data, ean: cleanEan }
+    }
+    return { success: false, error: data.error || 'Produto não encontrado na internet.' }
+  } catch (err) {
+    console.error('Erro ao consultar código de barras na internet:', err)
+    return { success: false, error: 'Falha de conexão com a base de códigos de barras.' }
+  }
+}
