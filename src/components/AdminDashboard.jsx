@@ -610,7 +610,7 @@ export default function AdminDashboard() {
         <X size={22} />
       </button>
 
-      <div className="modal modal-xl" style={{ maxHeight: '95vh' }} onClick={e => e.stopPropagation()}>
+      <div className="modal modal-admin" style={{ maxWidth: '1280px', width: '96vw', maxHeight: '95vh' }} onClick={e => e.stopPropagation()}>
 
         {/* Admin Header */}
         <div className="adm-header">
@@ -2485,15 +2485,19 @@ export default function AdminDashboard() {
           .adm-user-email { color: var(--dark-400); }
           .adm-header-actions { display: flex; gap: var(--space-2); }
           .adm-tabs {
-            display: flex; gap: var(--space-1); padding: 0 var(--space-6);
+            display: flex; gap: 4px; padding: 0 var(--space-6);
             border-bottom: 1px solid var(--dark-100); overflow-x: auto;
+            scrollbar-width: none;
+          }
+          .adm-tabs::-webkit-scrollbar {
+            display: none;
           }
           .adm-tab {
-            display: flex; align-items: center; gap: var(--space-2);
-            padding: var(--space-3) var(--space-4); font-size: var(--text-sm); font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            padding: var(--space-3) 14px; font-size: var(--text-sm); font-weight: 500;
             color: var(--dark-500); border-bottom: 2px solid transparent;
             transition: all var(--transition-fast); cursor: pointer; background: none; border-top: none; border-left: none; border-right: none;
-            white-space: nowrap;
+            white-space: nowrap; flex-shrink: 0;
           }
           .adm-tab:hover { color: var(--dark-800); }
           .adm-tab.active { color: var(--lime-dark); border-bottom-color: var(--lime); }

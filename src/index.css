@@ -433,6 +433,10 @@ input, textarea, select {
   max-width: 1100px;
 }
 
+.modal-admin, .modal-xxl {
+  max-width: 1280px;
+}
+
 /* --- Floating Close Button (Desgarrado no canto superior da tela) --- */
 .modal-close-floating {
   position: fixed;
