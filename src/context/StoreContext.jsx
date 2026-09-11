@@ -756,10 +756,20 @@ export function StoreProvider({ children }) {
     })
   }, [])
 
-  const deleteProduct = useCallback((productId) => {
-    setProducts(prev => prev.filter(p => p.id !== productId))
+  const deleteProduct = useCallback(async (productId, productEan = null, productName = null) => {
+    setProducts(prev => {
+      const filtered = prev.filter(p => p.id !== productId && (!productEan || p.ean !== productEan))
+      try {
+        localStorage.setItem('infodesk_products', JSON.stringify(filtered))
+      } catch (e) {}
+      return filtered
+    })
     if (isSupabaseConfigured) {
-      deleteProductFromDb(productId).catch(err => console.warn('Supabase delete product error:', err))
+      try {
+        await deleteProductFromDb(productId, productEan, productName)
+      } catch (err) {
+        console.warn('Supabase delete product error:', err)
+      }
     }
     showToast('Produto removido do catálogo.')
   }, [showToast])

@@ -122,13 +122,23 @@ export async function upsertProductToDb(product) {
   }
 }
 
-export async function deleteProductFromDb(productId) {
+export async function deleteProductFromDb(productId, productEan = null, productName = null) {
   if (!isSupabaseConfigured || !supabase) return false
   try {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId)
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId)
+    let query = supabase.from('products').delete()
+
+    if (isUuid) {
+      query = query.eq('id', productId)
+    } else if (productEan) {
+      query = query.eq('ean', productEan)
+    } else if (productName) {
+      query = query.eq('name', productName)
+    } else {
+      return false
+    }
+
+    const { error } = await query
 
     if (error) {
       console.warn('Supabase: Erro ao deletar produto:', error.message)

@@ -59,6 +59,8 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState(null)
   const [labelProduct, setLabelProduct] = useState(null)
   const [labelOrderToPrint, setLabelOrderToPrint] = useState(null)
+  const [productToDelete, setProductToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [productSearch, setProductSearch] = useState('')
 
   // Global tax input state
@@ -299,7 +301,9 @@ export default function AdminDashboard() {
     if (!showAdminDashboard) return
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (labelOrderToPrint) {
+        if (productToDelete) {
+          setProductToDelete(null)
+        } else if (labelOrderToPrint) {
           setLabelOrderToPrint(null)
         } else if (labelProduct) {
           setLabelProduct(null)
@@ -312,7 +316,7 @@ export default function AdminDashboard() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showAdminDashboard, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
+  }, [showAdminDashboard, productToDelete, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
 
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
@@ -885,9 +889,7 @@ export default function AdminDashboard() {
                               <button
                                 className="btn btn-ghost btn-sm"
                                 style={{ color: 'var(--red)' }}
-                                onClick={() => {
-                                  if (confirm(`Deseja realmente excluir "${p.name}" do catálogo?`)) deleteProduct(p.id)
-                                }}
+                                onClick={() => setProductToDelete(p)}
                                 title="Excluir produto"
                               >
                                 <Trash2 size={14} />
@@ -2400,6 +2402,18 @@ export default function AdminDashboard() {
                   <button
                     type="button"
                     className="btn btn-outline"
+                    style={{ color: 'var(--red)', borderColor: 'var(--red)', marginRight: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => {
+                      const target = editingProduct
+                      setEditingProduct(null)
+                      setProductToDelete(target)
+                    }}
+                  >
+                    <Trash2 size={16} /> Excluir Produto
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
                     onClick={() => setEditingProduct(null)}
                   >
                     Cancelar
@@ -2412,6 +2426,61 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE PRODUTO
+           ========================================================= */}
+        {productToDelete && (
+          <div className="overlay" style={{ zIndex: 750 }}>
+            <div className="modal" style={{ maxWidth: 440, textAlign: 'center', padding: 'var(--space-6)' }}>
+              <div style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: 'var(--red)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto var(--space-4)'
+              }}>
+                <Trash2 size={28} />
+              </div>
+              <h3 style={{ marginBottom: 'var(--space-2)' }}>Excluir Produto?</h3>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--dark-600)', marginBottom: 'var(--space-5)', lineHeight: 1.5 }}>
+                Tem certeza que deseja remover <strong>"{productToDelete.name}"</strong> do catálogo e do banco de dados? Esta ação não pode ser desfeita.
+              </p>
+              <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={isDeleting}
+                  onClick={() => setProductToDelete(null)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={isDeleting}
+                  style={{ background: 'var(--red)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  onClick={async () => {
+                    setIsDeleting(true)
+                    try {
+                      const target = productToDelete
+                      setProductToDelete(null)
+                      await deleteProduct(target.id, target.ean, target.name)
+                    } finally {
+                      setIsDeleting(false)
+                    }
+                  }}
+                >
+                  <Trash2 size={16} /> Sim, Excluir Produto
+                </button>
+              </div>
             </div>
           </div>
         )}
