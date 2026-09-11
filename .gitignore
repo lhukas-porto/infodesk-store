@@ -21,6 +21,8 @@ dist-ssr
 .env.development
 .correios_config.json
 *.correios_config.json
+*correios*.txt
+Dados correios.txt
 
 # Editor directories and files
 .vscode/*

@@ -94,6 +94,18 @@ export default function AdminLoginModal() {
     setShowCredsHint(false)
   }
 
+  // Suporte a fechar modal com tecla ESC
+  useEffect(() => {
+    if (!showAdminLogin) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowAdminLogin(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showAdminLogin, setShowAdminLogin])
+
   return (
     <div className="overlay">
       <div className="modal admin-login-modal">

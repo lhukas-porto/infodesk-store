@@ -67,6 +67,18 @@ export default function ProductModal() {
   const nextImg = () => setCurrentImg(i => (i + 1) % product.images.length)
   const prevImg = () => setCurrentImg(i => (i - 1 + product.images.length) % product.images.length)
 
+  // Suporte a fechar modal do produto com tecla ESC
+  useEffect(() => {
+    if (!product) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedProduct(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [product, setSelectedProduct])
+
   return (
     <div className="overlay">
       <div className="modal modal-lg">

@@ -246,6 +246,18 @@ export default function CheckoutModal() {
     setOrderResult(null)
   }
 
+  // Suporte a fechar checkout com tecla ESC
+  useEffect(() => {
+    if (!showCheckout) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        closeAll()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showCheckout])
+
   return (
     <div className="overlay">
       <div className="modal modal-lg">

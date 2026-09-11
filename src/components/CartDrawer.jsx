@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { X, Trash2, ShoppingBag, ArrowRight, Minus, Plus } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 
@@ -9,6 +9,18 @@ export default function CartDrawer() {
     updateCartQty, removeFromCart,
     setShowCheckout,
   } = useStore()
+
+  // Suporte a fechar carrinho com a tecla ESC
+  useEffect(() => {
+    if (!cartOpen) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setCartOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [cartOpen, setCartOpen])
 
   if (!cartOpen) return null
 

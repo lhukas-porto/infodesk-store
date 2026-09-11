@@ -127,7 +127,7 @@ export default function AdminDashboard() {
               storeId: data.storeId || storeIdToFetch,
               enabled: data.enabled !== undefined ? data.enabled : prev.enabled,
               usuario: data.usuario || prev.usuario || '',
-              codigoAcesso: data.maskedCodigoAcesso || prev.codigoAcesso || '',
+              codigoAcesso: (data.codigoAcesso !== undefined && data.codigoAcesso !== '') ? data.codigoAcesso : (data.maskedCodigoAcesso || prev.codigoAcesso || ''),
               contrato: data.contrato || prev.contrato || '',
               dr: data.dr || prev.dr || '10',
               cepOrigem: data.cepOrigem ? formatCep(data.cepOrigem) : prev.cepOrigem || '70673-631',
@@ -152,6 +152,24 @@ export default function AdminDashboard() {
     syncCorreiosFromBackend(correiosForm.storeId || 'default')
   }, [tab, correiosForm.storeId, syncCorreiosFromBackend])
 
+  // Suporte global para sair/fechar pelo ESC (fecha modais aninhados primeiro)
+  useEffect(() => {
+    if (!showAdminDashboard) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (labelProduct) {
+          setLabelProduct(null)
+        } else if (editingProduct) {
+          setEditingProduct(null)
+        } else {
+          setShowAdminDashboard(false)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showAdminDashboard, labelProduct, editingProduct, setShowAdminDashboard])
+
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
     setIsSavingCorreios(true)
@@ -167,7 +185,7 @@ export default function AdminDashboard() {
         const updated = {
           ...correiosForm,
           usuario: data.usuario || correiosForm.usuario,
-          codigoAcesso: data.maskedCodigoAcesso || correiosForm.codigoAcesso,
+          codigoAcesso: data.codigoAcesso || correiosForm.codigoAcesso,
           contrato: data.contrato || correiosForm.contrato,
           dr: data.dr || correiosForm.dr,
           cepOrigem: data.cepOrigem ? formatCep(data.cepOrigem) : correiosForm.cepOrigem,
@@ -435,7 +453,7 @@ export default function AdminDashboard() {
   })
 
   return (
-    <div className="overlay" onClick={() => setShowAdminDashboard(false)}>
+    <div className="overlay">
       <button
         className="modal-close-floating"
         onClick={(e) => {
@@ -1184,22 +1202,23 @@ export default function AdminDashboard() {
                         <input
                           type={showCodigoAcesso ? 'text' : 'password'}
                           className="input-field"
-                          value={correiosForm.codigoAcesso}
+                          value={correiosForm.codigoAcesso || ''}
                           onChange={e => setCorreiosForm({ ...correiosForm, codigoAcesso: e.target.value })}
-                          placeholder={correiosForm.hasCodigoAcesso ? '••••••••••••••••' : 'Insira o código de acesso'}
+                          placeholder="Insira o código de acesso às APIs"
                           style={{ paddingRight: '40px' }}
+                          autoComplete="new-password"
                         />
                         <button
                           type="button"
                           onClick={() => setShowCodigoAcesso(!showCodigoAcesso)}
                           style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dark-500)' }}
-                          title={showCodigoAcesso ? 'Ocultar' : 'Exibir'}
+                          title={showCodigoAcesso ? 'Ocultar Código' : 'Exibir Código'}
                         >
                           {showCodigoAcesso ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
                       <small style={{ color: 'var(--dark-400)', fontSize: '11px' }}>
-                        {correiosForm.hasCodigoAcesso ? '🔒 Chave salva e protegida com máscara no backend' : 'Chave gerada no portal Meu Correios'}
+                        {correiosForm.codigoAcesso ? '🔒 Token salvo e protegido. Clique no olho para visualizar ou digite para alterar.' : 'Chave gerada no portal Meu Correios'}
                       </small>
                     </div>
                   </div>

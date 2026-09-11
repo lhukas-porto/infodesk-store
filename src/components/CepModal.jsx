@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { MapPin, X, Check, AlertCircle, Loader2 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { consultarCep, formatCep } from '../services/correiosService'
@@ -18,6 +18,18 @@ export default function CepModal() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [addressPreview, setAddressPreview] = useState(globalAddress || null)
+
+  // Suporte a fechar modal com tecla ESC
+  useEffect(() => {
+    if (!showCepModal) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowCepModal(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showCepModal, setShowCepModal])
 
   if (!showCepModal) return null
 
@@ -65,7 +77,7 @@ export default function CepModal() {
   }
 
   return (
-    <div className="overlay" onClick={() => setShowCepModal(false)}>
+    <div className="overlay">
       <div className="modal cep-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-close" onClick={() => setShowCepModal(false)} aria-label="Fechar">
           <X size={20} />

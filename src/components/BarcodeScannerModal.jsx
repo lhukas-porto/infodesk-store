@@ -285,6 +285,18 @@ export default function BarcodeScannerModal() {
     setManualEan('')
   }
 
+  // Suporte a fechar scanner com tecla ESC
+  useEffect(() => {
+    if (!showScanner) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        close()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showScanner])
+
   return (
     <div className="overlay">
       <div className="modal modal-lg bcs-modal">

@@ -58,6 +58,18 @@ export default function CustomerAccountModal() {
   })
   const [regError, setRegError] = useState('')
 
+  // Suporte para sair/fechar pelo ESC
+  useEffect(() => {
+    if (!showCustomerAccount) return
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowCustomerAccount(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showCustomerAccount, setShowCustomerAccount])
+
   // Estado dos dados cadastrais (quando logado)
   const [formData, setFormData] = useState(customerProfile || {
     nome: '',
@@ -263,7 +275,7 @@ export default function CustomerAccountModal() {
   }
 
   return (
-    <div className="overlay" style={{ zIndex: 500 }} onClick={() => setShowCustomerAccount(false)}>
+    <div className="overlay" style={{ zIndex: 500 }}>
       {/* Botão de Fechar Flutuante / Desgarrado no Canto Superior Direito da Tela */}
       <button
         className="modal-close-floating"
