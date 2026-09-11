@@ -1588,125 +1588,128 @@ export default function AdminDashboard() {
               </div>
 
               <form onSubmit={handleSaveCompany} className="adm-editor-grid">
-                {/* 1. Identificação Fiscal & Jurídica */}
-                <div className="adm-editor-section">
-                  <h4 className="adm-section-title">
-                    <Briefcase size={16} /> Identificação Fiscal & Jurídica
-                  </h4>
-                  <div className="ck-form-grid">
-                    <div className="ck-field ck-field-full">
-                      <label>Razão Social *</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.razaoSocial || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, razaoSocial: e.target.value })}
-                        placeholder="Ex: Minha Empresa Comercial Ltda"
-                        required
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Nome Fantasia (Nome Público da Loja) *</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.nomeFantasia || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, nomeFantasia: e.target.value })}
-                        placeholder="Ex: Minha Loja Store"
-                        required
-                      />
-                      <span style={{ fontSize: '11px', color: 'var(--dark-500)', marginTop: '2px', display: 'block' }}>
-                        💡 Exibido no cabeçalho, título do navegador e rodapé.
-                      </span>
-                    </div>
-                    <div className="ck-field">
-                      <label>CNPJ *</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.cnpj || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, cnpj: formatCnpj(e.target.value) })}
-                        placeholder="00.000.000/0000-00"
-                        maxLength={18}
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Inscrição Estadual (IE)</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.inscricaoEstadual || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, inscricaoEstadual: e.target.value })}
-                        placeholder="Ex: 07.123.456/001-00 ou Isento"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Inscrição Municipal (IM)</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.inscricaoMunicipal || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, inscricaoMunicipal: e.target.value })}
-                        placeholder="Ex: 12345678"
-                      />
+                {/* Linha Superior: Fiscal & Jurídica (Esquerda) + Contatos (Direita) */}
+                <div className="adm-company-two-col">
+                  {/* 1. Identificação Fiscal & Jurídica */}
+                  <div className="adm-editor-section" style={{ height: '100%' }}>
+                    <h4 className="adm-section-title">
+                      <Briefcase size={16} /> Identificação Fiscal & Jurídica
+                    </h4>
+                    <div className="adm-form-grid">
+                      <div className="ck-field adm-col-12">
+                        <label>Razão Social *</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.razaoSocial || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, razaoSocial: e.target.value })}
+                          placeholder="Ex: Minha Empresa Comercial Ltda"
+                          required
+                        />
+                      </div>
+                      <div className="ck-field adm-col-12">
+                        <label>Nome Fantasia (Nome Público da Loja) *</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.nomeFantasia || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, nomeFantasia: e.target.value })}
+                          placeholder="Ex: Minha Loja Store"
+                          required
+                        />
+                        <span style={{ fontSize: '11px', color: 'var(--dark-500)', marginTop: '2px', display: 'block' }}>
+                          💡 Exibido no cabeçalho, título do navegador e rodapé.
+                        </span>
+                      </div>
+                      <div className="ck-field adm-col-4">
+                        <label>CNPJ *</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.cnpj || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, cnpj: formatCnpj(e.target.value) })}
+                          placeholder="00.000.000/0000-00"
+                          maxLength={18}
+                        />
+                      </div>
+                      <div className="ck-field adm-col-4">
+                        <label>Inscrição Estadual (IE)</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.inscricaoEstadual || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, inscricaoEstadual: e.target.value })}
+                          placeholder="Ex: 07.123.456/001-00 ou Isento"
+                        />
+                      </div>
+                      <div className="ck-field adm-col-4">
+                        <label>Inscrição Municipal (IM)</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.inscricaoMunicipal || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, inscricaoMunicipal: e.target.value })}
+                          placeholder="Ex: 12345678"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* 2. Contatos & Canais de Atendimento */}
-                <div className="adm-editor-section">
-                  <h4 className="adm-section-title">
-                    <Phone size={16} /> Contatos & Canais Oficiais de Atendimento
-                  </h4>
-                  <div className="ck-form-grid">
-                    <div className="ck-field">
-                      <label>E-mail Principal / Administrativo *</label>
-                      <input
-                        type="email"
-                        className="input-field"
-                        value={companyForm.emailPrincipal || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, emailPrincipal: e.target.value })}
-                        placeholder="contato@suaempresa.com.br"
-                        required
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>E-mail de Atendimento ao Cliente</label>
-                      <input
-                        type="email"
-                        className="input-field"
-                        value={companyForm.emailAtendimento || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, emailAtendimento: e.target.value })}
-                        placeholder="suporte@suaempresa.com.br"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Telefone Fixo</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.telefone || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, telefone: formatCompanyPhone(e.target.value) })}
-                        placeholder="(61) 3033-0000"
-                        maxLength={15}
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>WhatsApp Oficial da Loja *</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.whatsapp || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, whatsapp: formatCompanyPhone(e.target.value) })}
-                        placeholder="(61) 9 9999-9999"
-                        maxLength={16}
-                      />
-                      <span style={{ fontSize: '11px', color: 'var(--dark-500)', marginTop: '2px', display: 'block' }}>
-                        💬 Utilizado nos botões de contato do rodapé, checkout e notificações de pedidos.
-                      </span>
-                    </div>
-                    <div className="ck-field ck-field-full">
-                      <label>Site Oficial / Domínio</label>
-                      <input
-                        type="url"
-                        className="input-field"
-                        value={companyForm.site || ''}
-                        onChange={e => setCompanyForm({ ...companyForm, site: e.target.value })}
-                        placeholder="https://suaempresa.com.br"
-                      />
+                  {/* 2. Contatos & Canais de Atendimento */}
+                  <div className="adm-editor-section" style={{ height: '100%' }}>
+                    <h4 className="adm-section-title">
+                      <Phone size={16} /> Contatos & Canais Oficiais de Atendimento
+                    </h4>
+                    <div className="adm-form-grid">
+                      <div className="ck-field adm-col-6">
+                        <label>E-mail Principal *</label>
+                        <input
+                          type="email"
+                          className="input-field"
+                          value={companyForm.emailPrincipal || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, emailPrincipal: e.target.value })}
+                          placeholder="contato@suaempresa.com.br"
+                          required
+                        />
+                      </div>
+                      <div className="ck-field adm-col-6">
+                        <label>E-mail de Atendimento</label>
+                        <input
+                          type="email"
+                          className="input-field"
+                          value={companyForm.emailAtendimento || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, emailAtendimento: e.target.value })}
+                          placeholder="suporte@suaempresa.com.br"
+                        />
+                      </div>
+                      <div className="ck-field adm-col-6">
+                        <label>Telefone Fixo</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.telefone || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, telefone: formatCompanyPhone(e.target.value) })}
+                          placeholder="(61) 3033-0000"
+                          maxLength={15}
+                        />
+                      </div>
+                      <div className="ck-field adm-col-6">
+                        <label>WhatsApp Oficial da Loja *</label>
+                        <input
+                          className="input-field"
+                          value={companyForm.whatsapp || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, whatsapp: formatCompanyPhone(e.target.value) })}
+                          placeholder="(61) 9 9999-9999"
+                          maxLength={16}
+                        />
+                        <span style={{ fontSize: '11px', color: 'var(--dark-500)', marginTop: '2px', display: 'block' }}>
+                          💬 Utilizado nos botões de contato do rodapé e checkout.
+                        </span>
+                      </div>
+                      <div className="ck-field adm-col-12">
+                        <label>Site Oficial / Domínio</label>
+                        <input
+                          type="url"
+                          className="input-field"
+                          value={companyForm.site || ''}
+                          onChange={e => setCompanyForm({ ...companyForm, site: e.target.value })}
+                          placeholder="https://suaempresa.com.br"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1716,13 +1719,13 @@ export default function AdminDashboard() {
                   <h4 className="adm-section-title">
                     <MapPin size={16} /> Endereço da Sede & Centro de Distribuição
                   </h4>
-                  <div className="ck-form-grid">
-                    <div className="ck-field">
+                  <div className="adm-form-grid">
+                    <div className="ck-field adm-col-3">
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <span>CEP da Sede *</span>
                         {isSearchingCompanyCep && (
                           <span style={{ fontSize: '11px', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <Loader2 size={11} className="spin" /> Buscando nos Correios...
+                            <Loader2 size={11} className="spin" /> Buscando...
                           </span>
                         )}
                       </label>
@@ -1734,16 +1737,7 @@ export default function AdminDashboard() {
                         maxLength={9}
                       />
                     </div>
-                    <div className="ck-field">
-                      <label>País</label>
-                      <input
-                        className="input-field"
-                        value={companyForm.pais || 'Brasil'}
-                        onChange={e => setCompanyForm({ ...companyForm, pais: e.target.value })}
-                        placeholder="Brasil"
-                      />
-                    </div>
-                    <div className="ck-field ck-field-full">
+                    <div className="ck-field adm-col-6">
                       <label>Logradouro / Endereço *</label>
                       <input
                         className="input-field"
@@ -1753,7 +1747,7 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
+                    <div className="ck-field adm-col-3">
                       <label>Número *</label>
                       <input
                         className="input-field"
@@ -1763,7 +1757,7 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
+                    <div className="ck-field adm-col-3">
                       <label>Complemento</label>
                       <input
                         className="input-field"
@@ -1772,7 +1766,7 @@ export default function AdminDashboard() {
                         placeholder="Ex: Sala 108, Andar 2, Galpão B"
                       />
                     </div>
-                    <div className="ck-field">
+                    <div className="ck-field adm-col-3">
                       <label>Bairro *</label>
                       <input
                         className="input-field"
@@ -1782,7 +1776,7 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
+                    <div className="ck-field adm-col-3">
                       <label>Cidade *</label>
                       <input
                         className="input-field"
@@ -1792,8 +1786,8 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
-                      <label>Estado (UF) *</label>
+                    <div className="ck-field adm-col-1">
+                      <label>UF *</label>
                       <input
                         className="input-field"
                         value={companyForm.estado || ''}
@@ -1801,6 +1795,16 @@ export default function AdminDashboard() {
                         placeholder="DF"
                         maxLength={2}
                         required
+                        style={{ textAlign: 'center' }}
+                      />
+                    </div>
+                    <div className="ck-field adm-col-2">
+                      <label>País</label>
+                      <input
+                        className="input-field"
+                        value={companyForm.pais || 'Brasil'}
+                        onChange={e => setCompanyForm({ ...companyForm, pais: e.target.value })}
+                        placeholder="Brasil"
                       />
                     </div>
                   </div>
@@ -2615,6 +2619,34 @@ export default function AdminDashboard() {
           .adm-editor-header h3 { font-size: var(--text-lg); margin-bottom: 2px; }
           .adm-editor-header p { font-size: var(--text-xs); color: var(--dark-500); }
           .adm-editor-grid { display: flex; flex-direction: column; gap: var(--space-5); }
+          .adm-company-two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-4);
+          }
+          @media (max-width: 960px) {
+            .adm-company-two-col {
+              grid-template-columns: 1fr;
+            }
+          }
+          .adm-form-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 12px;
+          }
+          .adm-col-12 { grid-column: span 12; }
+          .adm-col-8 { grid-column: span 8; }
+          .adm-col-6 { grid-column: span 6; }
+          .adm-col-4 { grid-column: span 4; }
+          .adm-col-3 { grid-column: span 3; }
+          .adm-col-2 { grid-column: span 2; }
+          .adm-col-1 { grid-column: span 1; }
+          @media (max-width: 768px) {
+            .adm-col-4, .adm-col-3, .adm-col-2, .adm-col-1 { grid-column: span 6; }
+          }
+          @media (max-width: 540px) {
+            .adm-col-6, .adm-col-4, .adm-col-3, .adm-col-2, .adm-col-1 { grid-column: span 12; }
+          }
           .adm-editor-section {
             padding: var(--space-5); background: var(--dark-50);
             border-radius: var(--radius-xl); border: 1px solid var(--dark-200);
