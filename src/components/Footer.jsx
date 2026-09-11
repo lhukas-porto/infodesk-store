@@ -107,7 +107,6 @@ export default function Footer() {
         <div className="container">
           <div className="footer-grid">
             <div className="footer-brand">
-              <h4 className="footer-brand-title">{publicName}</h4>
               <p>{companyData?.descricaoCurta || 'Tudo o que você e sua empresa precisam em um só lugar. Variedade completa, procedência garantida, frete rápido dos Correios e o melhor atendimento do Brasil.'}</p>
             </div>
             <div className="footer-links">
@@ -255,19 +254,11 @@ export default function Footer() {
         @media (min-width: 768px) {
           .footer-grid { grid-template-columns: 2fr 1fr 1fr 1.5fr; }
         }
-        .footer-brand-title {
-          color: var(--white);
-          font-size: var(--text-base);
-          font-weight: 700;
-          margin-bottom: var(--space-3);
-          font-family: var(--font-display);
-          letter-spacing: -0.2px;
-        }
         .footer-brand p {
-          margin-top: 0;
+          margin: 0;
           font-size: var(--text-sm);
           line-height: 1.6;
-          max-width: 300px;
+          max-width: 320px;
         }
         .footer-links h4 {
           color: var(--white);
