@@ -128,22 +128,44 @@ export function generateBarcodeLabelPDF({ product, ean, price }) {
 export async function fetchProductByBarcode(ean) {
   const cleanEan = (ean || '').replace(/\D/g, '')
   if (!cleanEan || cleanEan.length < 6) {
-    return { success: false, error: 'Código de barras inválido.' }
+    return { success: false, error: 'Código de barras deve conter pelo menos 6 dígitos numéricos.' }
   }
 
   try {
     const res = await fetch(`/api/barcode/lookup?ean=${encodeURIComponent(cleanEan)}`)
     const data = await res.json()
-    if (data.success && data.data) {
-      if (data.data.found === true) {
-        return { success: true, found: true, product: data.data, ean: cleanEan }
+    if (data.success) {
+      if (data.found && data.data) {
+        return {
+          success: true,
+          found: true,
+          product: data.data,
+          ean: data.ean || cleanEan,
+          gtin14: data.gtin14 || data.data.gtin14
+        }
       } else {
-        return { success: true, found: false, ean: cleanEan, message: data.data.message }
+        return {
+          success: true,
+          found: false,
+          ean: data.ean || cleanEan,
+          gtin14: data.gtin14,
+          message: data.message || 'Produto não identificado'
+        }
       }
     }
-    return { success: false, error: data.error || 'Produto não encontrado na internet.', ean: cleanEan }
+    return {
+      success: false,
+      found: false,
+      error: data.error || 'Produto não encontrado na internet.',
+      ean: cleanEan
+    }
   } catch (err) {
     console.error('Erro ao consultar código de barras na internet:', err)
-    return { success: false, error: 'Falha de conexão com a base de códigos de barras.', ean: cleanEan }
+    return {
+      success: false,
+      found: false,
+      error: 'Falha de conexão com a base de códigos de barras.',
+      ean: cleanEan
+    }
   }
 }

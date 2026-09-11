@@ -776,9 +776,16 @@ export default function BarcodeScannerModal() {
               {webProductResult && !isBarcodeSearching && (
                 <div className="bcs-web-result-card">
                   <div className="bcs-web-header">
-                    <span className="badge badge-lime">
-                      <Sparkles size={12} /> {webProductResult.source || 'Identificado na Internet via EAN'}
-                    </span>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span className="badge badge-lime">
+                        <Sparkles size={12} /> {webProductResult.source || 'Base de Dados GTIN'}
+                      </span>
+                      {webProductResult.confidence && (
+                        <span className="badge badge-dark" style={{ background: '#064e3b', color: '#6ee7b7' }}>
+                          ✓ {webProductResult.confidence}
+                        </span>
+                      )}
+                    </div>
                     {detectedProduct ? (
                       <span className="badge badge-blue">✓ Já em estoque na sua loja ({detectedProduct.stock} un)</span>
                     ) : (
@@ -795,11 +802,27 @@ export default function BarcodeScannerModal() {
                     <div className="bcs-web-info">
                       <div className="bcs-web-tags">
                         <span className="badge badge-dark">{webProductResult.brand}</span>
+                        {webProductResult.manufacturer && webProductResult.manufacturer !== webProductResult.brand && (
+                          <span className="badge badge-dark" style={{ opacity: 0.85 }}>Fab: {webProductResult.manufacturer}</span>
+                        )}
                         <span className="badge badge-light">{webProductResult.category}</span>
-                        <span className="bcs-ean-tag">EAN: <code>{webProductResult.ean || manualEan}</code></span>
+                        <span className="bcs-ean-tag">GTIN: <code>{webProductResult.gtin || webProductResult.ean || manualEan}</code></span>
+                        {webProductResult.gtin14 && (
+                          <span className="bcs-ean-tag" title="GTIN-14 Normalizado">GTIN-14: <code>{webProductResult.gtin14}</code></span>
+                        )}
+                        {webProductResult.partNumber && (
+                          <span className="badge badge-dark" style={{ background: '#1e1b4b', color: '#a5b4fc' }}>
+                            P/N: {webProductResult.partNumber}
+                          </span>
+                        )}
+                        {webProductResult.ncm && (
+                          <span className="badge badge-light">NCM: {webProductResult.ncm}</span>
+                        )}
                       </div>
                       <h3 className="bcs-web-title">{webProductResult.name}</h3>
-                      <p className="bcs-web-desc">{webProductResult.description}</p>
+                      {webProductResult.description && (
+                        <p className="bcs-web-desc">{webProductResult.description}</p>
+                      )}
 
                       {webProductResult.specs && webProductResult.specs.length > 0 && (
                         <div className="bcs-web-specs">
