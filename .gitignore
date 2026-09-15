@@ -34,3 +34,6 @@ Dados correios.txt
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+.env*
