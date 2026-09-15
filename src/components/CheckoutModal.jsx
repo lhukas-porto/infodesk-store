@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   X, CreditCard, FileText, QrCode, ArrowLeft, CheckCircle, Copy,
   MapPin, Loader2, CheckCircle2, AlertCircle, Sparkles, MessageCircle,
-  Truck, Mail
+  Truck, Mail, ShieldCheck, LogIn, UserPlus, Eye, EyeOff, User, KeyRound, Lock
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import {
@@ -17,6 +17,8 @@ import {
 } from '../services/correiosService'
 import { gerarBoleto, gerarBoletoPDF, gerarLinkPagamento } from '../services/paymentService'
 import { createWhatsAppLink, buildCustomerOrderSupportMessage } from '../services/whatsappService'
+import { getStoredUtmData } from '../services/utmTracker'
+import { trackBeginCheckout, trackPurchase } from '../services/analyticsService'
 
 export default function CheckoutModal() {
   const {
@@ -24,14 +26,20 @@ export default function CheckoutModal() {
     setShowCheckout,
     cart,
     cartTotal,
+    clearCart,
     createOrder,
     showToast,
     customerProfile,
+    isCustomerLoggedIn,
+    loginCustomer,
+    registerCustomer,
+    logoutCustomer,
     globalCep,
     globalAddress,
     companyData
   } = useStore()
   const [step, setStep] = useState(1) // 1: Info, 2: Freight, 3: Payment, 4: Success
+  const [isCreatingMPOrder, setIsCreatingMPOrder] = useState(false)
   const [cliente, setCliente] = useState({
     nome: '',
     email: '',
@@ -64,14 +72,105 @@ export default function CheckoutModal() {
     }))
   }, [customerProfile, globalCep, globalAddress])
 
+  // Dispara evento GA4 de início de checkout quando o modal for aberto com itens
+  useEffect(() => {
+    if (showCheckout && cart?.length > 0) {
+      trackBeginCheckout(cart, cartTotal)
+    }
+  }, [showCheckout])
+
   const [isCepLoading, setIsCepLoading] = useState(false)
   const [isFreteLoading, setIsFreteLoading] = useState(false)
   const [isValidatingOrder, setIsValidatingOrder] = useState(false)
   const [cepFeedback, setCepFeedback] = useState(null) // { type: 'success' | 'error', message: string }
   const [freteResult, setFreteResult] = useState(null)
   const [selectedFrete, setSelectedFrete] = useState(null)
-  const [paymentMethod, setPaymentMethod] = useState(null) // 'boleto' | 'link' | 'pix'
+  const [paymentMethod, setPaymentMethod] = useState('mercadopago') // Mercado Pago Oficial
   const [orderResult, setOrderResult] = useState(null)
+
+  // --- Estados de Autenticação Expressa no Checkout ---
+  const [authMode, setAuthMode] = useState(null) // null (tela inicial limpa com botões) | 'login' | 'new'
+  const [loginIdentifier, setLoginIdentifier] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+  const [loginError, setLoginError] = useState('')
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
+  // Opção de criar conta ao finalizar compra
+  const [wantsToCreateAccount, setWantsToCreateAccount] = useState(false)
+  const [createPassword, setCreatePassword] = useState('')
+  const [showCreatePassword, setShowCreatePassword] = useState(false)
+
+  // Login Expresso no Checkout
+  const handleExpressLogin = (e) => {
+    e?.preventDefault()
+    setLoginError('')
+    if (!loginIdentifier.trim()) {
+      setLoginError('Informe seu E-mail ou CPF cadastrado.')
+      return
+    }
+    if (!loginPassword) {
+      setLoginError('Informe sua senha de acesso.')
+      return
+    }
+
+    setIsLoggingIn(true)
+    try {
+      const res = loginCustomer(loginIdentifier, loginPassword)
+      if (!res.success) {
+        setLoginError(res.error || 'Credenciais inválidas.')
+        return
+      }
+
+      const user = res.customer
+      setCliente(prev => ({
+        ...prev,
+        nome: user.nome || prev.nome,
+        email: user.email || prev.email,
+        cpf: user.cpf ? formatCpf(user.cpf) : prev.cpf,
+        telefone: user.telefone ? formatPhone(user.telefone) : prev.telefone,
+        cep: user.cep ? formatCep(user.cep) : prev.cep,
+        endereco: user.endereco || prev.endereco,
+        numero: user.numero || prev.numero,
+        complemento: user.complemento || prev.complemento,
+        bairro: user.bairro || prev.bairro,
+        cidade: user.cidade || prev.cidade,
+        estado: user.estado || prev.estado,
+      }))
+      setAuthMode('new')
+      setLoginPassword('')
+      showToast(`Bem-vindo(a) de volta, ${user.nome.split(' ')[0]}! Dados carregados. ✨`)
+    } catch (err) {
+      setLoginError('Erro ao autenticar. Tente novamente.')
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
+  const handleStep1Submit = () => {
+    // Se o cliente ainda não estiver logado, a criação de senha e conta é OBRIGATÓRIA
+    if (!isCustomerLoggedIn) {
+      if (!createPassword || createPassword.trim().length < 4) {
+        showToast('Por favor, crie uma senha de acesso com no mínimo 4 caracteres para rastrear seu pedido. 🔒', 'error')
+        return
+      }
+
+      const regRes = registerCustomer({
+        ...cliente,
+        password: createPassword
+      })
+
+      if (!regRes.success) {
+        showToast(regRes.error || 'Já existe um cadastro com este E-mail ou CPF. Acesse com sua senha.', 'error')
+        setLoginIdentifier(cliente.email || cliente.cpf)
+        setAuthMode('login')
+        return
+      }
+    }
+
+    handleManualCalcFrete()
+    setStep(2)
+  }
   // Calcula o peso acumulado de todos os itens e quantidades no carrinho
   const totalCartWeight = (cart || []).reduce((acc, item) => {
     return acc + (getProductWeight(item) * (item.qty || 1))
@@ -208,6 +307,55 @@ export default function CheckoutModal() {
         enderecoCompleto: fullAddress
       },
       paymentMethod,
+      utm_data: getStoredUtmData(),
+    }
+
+    if (paymentMethod === 'mercadopago') {
+      try {
+        setIsCreatingMPOrder(true)
+        const orderId = 'ORD-' + Date.now()
+        const orderPayload = {
+          ...pedido,
+          id: orderId
+        }
+
+        const res = await fetch('/api/payments/mercadopago/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderData: orderPayload,
+            companyId: companyData?.id || 'default'
+          })
+        })
+
+        const data = await res.json()
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Falha ao gerar checkout com o Mercado Pago.')
+        }
+
+        // Salva o pedido localmente no contexto
+        createOrder(orderPayload)
+
+        // Dispara evento GA4 de purchase (sem PII)
+        trackPurchase(orderPayload, cart)
+
+        // Limpa o carrinho de compras apenas após a criação da Order confirmada
+        clearCart()
+        showToast('Redirecionando para o Checkout Pro do Mercado Pago... 🔒')
+
+        if (data.checkout_url) {
+          setTimeout(() => {
+            window.location.href = data.checkout_url
+          }, 600)
+        }
+        return
+      } catch (err) {
+        console.error('Erro no checkout Mercado Pago:', err)
+        showToast(err.message || 'Erro ao conectar com o Mercado Pago. Tente novamente.')
+      } finally {
+        setIsCreatingMPOrder(false)
+      }
+      return
     }
 
     if (paymentMethod === 'boleto') {
@@ -219,6 +367,8 @@ export default function CheckoutModal() {
     }
 
     const order = createOrder(pedido)
+    // Dispara evento GA4 de purchase (sem PII)
+    trackPurchase(order || pedido, cart)
     setOrderResult({ ...order, ...pedido })
     setStep(4)
   }
@@ -243,9 +393,24 @@ export default function CheckoutModal() {
     setCepFeedback(null)
     setFreteResult(null)
     setSelectedFrete(null)
-    setPaymentMethod(null)
+    setPaymentMethod('mercadopago')
     setOrderResult(null)
+    setAuthMode(null)
+    setLoginIdentifier('')
+    setLoginPassword('')
+    setLoginError('')
+    setWantsToCreateAccount(false)
+    setCreatePassword('')
   }
+
+  // Ao abrir o checkout modal, garante que comece limpo (apenas com os botões de escolha se não estiver logado)
+  useEffect(() => {
+    if (showCheckout) {
+      if (!isCustomerLoggedIn) {
+        setAuthMode(null)
+      }
+    }
+  }, [showCheckout, isCustomerLoggedIn])
 
   // Suporte a fechar checkout com tecla ESC
   useEffect(() => {
@@ -277,183 +442,499 @@ export default function CheckoutModal() {
         </div>
 
         <div className="ck-body">
-          {/* Step 1: Customer Data with Auto-CEP */}
+          {/* Step 1: Identificação, Login ou Cadastro & Endereço */}
           {step === 1 && (
             <div className="ck-form">
-              <h3>Identificação & Entrega</h3>
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)', marginBottom: 'var(--space-4)' }}>
-                Preencha seus dados para entrega e emissão do comprovante/nota.
-              </p>
-
-              <div className="ck-form-grid">
-                {/* Nome */}
-                <div className="ck-field ck-field-full">
-                  <label>Nome Completo *</label>
-                  <input
-                    className="input-field"
-                    value={cliente.nome}
-                    onChange={e => setCliente({ ...cliente, nome: e.target.value })}
-                    placeholder="Seu nome completo"
-                    required
-                  />
-                </div>
-
-                {/* E-mail em minúsculo */}
-                <div className="ck-field">
-                  <label>E-mail *</label>
-                  <input
-                    className="input-field"
-                    type="email"
-                    value={cliente.email}
-                    onChange={e => setCliente({ ...cliente, email: e.target.value.toLowerCase().trim() })}
-                    placeholder="seuemail@provedor.com"
-                    autoCapitalize="none"
-                    spellCheck="false"
-                    required
-                  />
-                </div>
-
-                {/* CPF com máscara */}
-                <div className="ck-field">
-                  <label>CPF *</label>
-                  <input
-                    className="input-field"
-                    value={cliente.cpf}
-                    onChange={e => setCliente({ ...cliente, cpf: formatCpf(e.target.value) })}
-                    placeholder="000.000.000-00"
-                    maxLength={14}
-                    required
-                  />
-                </div>
-
-                {/* Telefone com máscara */}
-                <div className="ck-field">
-                  <label>WhatsApp / Telefone *</label>
-                  <input
-                    className="input-field"
-                    value={cliente.telefone}
-                    onChange={e => setCliente({ ...cliente, telefone: formatPhone(e.target.value) })}
-                    placeholder="(00) 00000-0000"
-                    maxLength={15}
-                    required
-                  />
-                </div>
-
-                {/* CEP com máscara e busca automática */}
-                <div className="ck-field">
-                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>CEP (Busca nos Correios) *</span>
-                    {isCepLoading && (
-                      <span style={{ fontSize: '11px', color: 'var(--lime-dark)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Loader2 size={12} className="animate-spin" /> Buscando...
-                      </span>
-                    )}
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      className="input-field"
-                      value={cliente.cep}
-                      onChange={e => handleCepChange(e.target.value)}
-                      placeholder="00000-000"
-                      maxLength={9}
-                      required
-                    />
-                    <MapPin size={16} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dark-400)', pointerEvents: 'none' }} />
-                  </div>
-                </div>
-
-                {/* Feedback da busca de CEP */}
-                {cepFeedback && (
-                  <div className={`ck-field ck-field-full ck-cep-feedback ${cepFeedback.type}`}>
-                    {cepFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-                    <span>{cepFeedback.message}</span>
-                  </div>
-                )}
-
-                {/* Endereço / Logradouro */}
-                <div className="ck-field ck-field-full">
-                  <label>Rua / Logradouro *</label>
-                  <input
-                    className="input-field"
-                    value={cliente.endereco}
-                    onChange={e => setCliente({ ...cliente, endereco: e.target.value })}
-                    placeholder="Ex: Rua das Acácias, SCS Quadra 01..."
-                    required
-                  />
-                </div>
-
-                {/* Linha 1: Número e Complemento */}
-                <div className="ck-grid-num-comp">
-                  <div className="ck-field">
-                    <label>Número *</label>
-                    <input
-                      className="input-field"
-                      value={cliente.numero}
-                      onChange={e => setCliente({ ...cliente, numero: e.target.value })}
-                      placeholder="Ex: 120 ou S/N"
-                      required
-                    />
-                  </div>
-
-                  <div className="ck-field">
-                    <label>Complemento</label>
-                    <input
-                      className="input-field"
-                      value={cliente.complemento}
-                      onChange={e => setCliente({ ...cliente, complemento: e.target.value })}
-                      placeholder="Apto, Bloco, Sala..."
-                    />
-                  </div>
-                </div>
-
-                {/* Linha 2: Bairro, Cidade e Estado */}
-                <div className="ck-grid-bairro-cidade-uf">
-                  <div className="ck-field">
-                    <label>Bairro *</label>
-                    <input
-                      className="input-field"
-                      value={cliente.bairro}
-                      onChange={e => setCliente({ ...cliente, bairro: e.target.value })}
-                      placeholder="Ex: Asa Sul, Centro, Jardins..."
-                      required
-                    />
-                  </div>
-
-                  <div className="ck-field">
-                    <label>Cidade *</label>
-                    <input
-                      className="input-field"
-                      value={cliente.cidade}
-                      onChange={e => setCliente({ ...cliente, cidade: e.target.value })}
-                      placeholder="Ex: Brasília"
-                      required
-                    />
-                  </div>
-
-                  <div className="ck-field">
-                    <label>Estado *</label>
-                    <input
-                      className="input-field"
-                      value={cliente.estado}
-                      onChange={e => setCliente({ ...cliente, estado: e.target.value.toUpperCase() })}
-                      placeholder="DF"
-                      maxLength={2}
-                      required
-                    />
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Identificação & Entrega</h3>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)', margin: '2px 0 0 0' }}>
+                    Identifique-se para entrega e emissão segura do comprovante do seu pedido.
+                  </p>
                 </div>
               </div>
 
-              <button
-                className="btn btn-primary btn-lg ck-next"
-                onClick={() => {
-                  handleManualCalcFrete()
-                  setStep(2)
-                }}
-                disabled={!cliente.nome || !cliente.email || !cliente.cpf || !cliente.cep || !cliente.endereco}
-              >
-                Prosseguir para Frete dos Correios
-              </button>
+              {/* Banner se o cliente já estiver logado */}
+              {isCustomerLoggedIn && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'linear-gradient(135deg, rgba(132, 204, 22, 0.12), rgba(132, 204, 22, 0.04))',
+                  border: '1px solid rgba(132, 204, 22, 0.35)',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  marginBottom: '18px',
+                  gap: '12px',
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: '50%', background: 'var(--lime)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', flexShrink: 0
+                    }}>
+                      <CheckCircle2 size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark-900)' }}>
+                        Identificado como: {customerProfile?.nome}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--dark-600)' }}>
+                        {customerProfile?.email} • Seus dados e endereço foram carregados automaticamente
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => {
+                      logoutCustomer()
+                      setAuthMode(null)
+                      showToast('Sessão encerrada no checkout.')
+                    }}
+                    style={{ color: 'var(--dark-500)', textDecoration: 'underline', fontSize: '11px', cursor: 'pointer' }}
+                  >
+                    Não é você? Trocar de conta
+                  </button>
+                </div>
+              )}
+
+              {/* TELA INICIAL LIMPA: APENAS OS DOIS BOTÕES DE ESCOLHA */}
+              {!isCustomerLoggedIn && authMode === null && (
+                <div style={{ padding: '8px 0 20px 0' }}>
+                  <p style={{ fontSize: '14px', color: 'var(--dark-700)', marginBottom: '20px', lineHeight: 1.5 }}>
+                    Para continuar com a sua compra, como prefere se identificar?
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    {/* Opção 1: Já sou cadastrado */}
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('login')}
+                      style={{
+                        background: 'var(--white)',
+                        border: '2px solid var(--dark-200)',
+                        borderRadius: '14px',
+                        padding: '24px 20px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = 'var(--lime-dark)'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = 'var(--dark-200)'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                      }}
+                    >
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 12, background: 'var(--dark-100)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dark-900)'
+                      }}>
+                        <LogIn size={22} />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '15px', color: 'var(--dark-900)', display: 'block', marginBottom: 4 }}>
+                          Já sou cadastrado (Entrar)
+                        </strong>
+                        <span style={{ fontSize: '12px', color: 'var(--dark-500)', lineHeight: 1.4, display: 'block' }}>
+                          Acesse sua conta para carregar seus dados e endereço salvos automaticamente.
+                        </span>
+                      </div>
+                      <span className="btn btn-outline btn-sm" style={{ marginTop: 'auto', pointerEvents: 'none' }}>
+                        Fazer Login ➔
+                      </span>
+                    </button>
+
+                    {/* Opção 2: Primeira compra */}
+                    <button
+                      type="button"
+                      onClick={() => setAuthMode('new')}
+                      style={{
+                        background: 'var(--white)',
+                        border: '2px solid var(--lime)',
+                        borderRadius: '14px',
+                        padding: '24px 20px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = 'translateY(0)'
+                      }}
+                    >
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 12, background: 'var(--lime-glow)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--lime-dark)'
+                      }}>
+                        <UserPlus size={22} />
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: '15px', color: 'var(--dark-900)', display: 'block', marginBottom: 4 }}>
+                          Primeira compra (Novo Cliente)
+                        </strong>
+                        <span style={{ fontSize: '12px', color: 'var(--dark-500)', lineHeight: 1.4, display: 'block' }}>
+                          Preencha seu endereço de entrega e dados para envio da encomenda.
+                        </span>
+                      </div>
+                      <span className="btn btn-primary btn-sm" style={{ marginTop: 'auto', pointerEvents: 'none' }}>
+                        Preencher Dados ➔
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Cabeçalho quando estiver dentro de uma das opções para poder voltar */}
+              {!isCustomerLoggedIn && authMode !== null && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setAuthMode(null)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 16, color: 'var(--dark-600)', padding: 0 }}
+                >
+                  <ArrowLeft size={16} /> Voltar para escolher identificação
+                </button>
+              )}
+
+              {/* Formulário de Login Expresso dentro do checkout */}
+              {authMode === 'login' && !isCustomerLoggedIn && (
+                <div style={{
+                  background: 'var(--dark-50)',
+                  border: '1px solid var(--dark-200)',
+                  borderRadius: '14px',
+                  padding: '24px 20px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8, background: 'var(--lime)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000'
+                    }}>
+                      <LogIn size={18} />
+                    </div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--dark-900)' }}>
+                        Acessar Conta Infodesk
+                      </h4>
+                      <span style={{ fontSize: '12px', color: 'var(--dark-500)' }}>
+                        Preencha seus dados para carregar suas informações de entrega na hora.
+                      </span>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleExpressLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: 16 }}>
+                    <div className="ck-field">
+                      <label>E-mail ou CPF *</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={loginIdentifier}
+                        onChange={e => setLoginIdentifier(e.target.value)}
+                        placeholder="Digite seu e-mail ou CPF cadastrado"
+                        autoFocus
+                        required
+                      />
+                    </div>
+
+                    <div className="ck-field">
+                      <label>Senha *</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showLoginPassword ? 'text' : 'password'}
+                          className="input-field"
+                          value={loginPassword}
+                          onChange={e => setLoginPassword(e.target.value)}
+                          placeholder="Digite sua senha de acesso"
+                          required
+                          style={{ paddingRight: 40 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword(!showLoginPassword)}
+                          style={{
+                            position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dark-400)'
+                          }}
+                          tabIndex={-1}
+                          title={showLoginPassword ? 'Ocultar senha' : 'Ver senha'}
+                        >
+                          {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {loginError && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        background: 'var(--red-glow)', color: 'var(--red)',
+                        padding: '10px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600
+                      }}>
+                        <AlertCircle size={16} />
+                        <span>{loginError}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={isLoggingIn}
+                      style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}
+                    >
+                      {isLoggingIn ? <Loader2 size={16} className="spin" /> : <LogIn size={16} />}
+                      {isLoggingIn ? 'Autenticando...' : 'Entrar e Carregar Meus Dados'}
+                    </button>
+
+                    <div style={{ textAlign: 'center', marginTop: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode('new')}
+                        style={{ background: 'none', border: 'none', color: 'var(--dark-600)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Ainda não tem cadastro? Preencha os dados como novo cliente
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Formulário de Identificação e Entrega (Exibido apenas quando for 'new' ou se já estiver logado) */}
+              {(authMode === 'new' || isCustomerLoggedIn) && (
+                <>
+                  <div className="ck-form-grid">
+                  {/* Nome */}
+                  <div className="ck-field ck-field-full">
+                    <label>Nome Completo *</label>
+                    <input
+                      className="input-field"
+                      value={cliente.nome}
+                      onChange={e => setCliente({ ...cliente, nome: e.target.value })}
+                      placeholder="Seu nome completo"
+                      required
+                    />
+                  </div>
+
+                  {/* E-mail em minúsculo */}
+                  <div className="ck-field">
+                    <label>E-mail *</label>
+                    <input
+                      className="input-field"
+                      type="email"
+                      value={cliente.email}
+                      onChange={e => setCliente({ ...cliente, email: e.target.value.toLowerCase().trim() })}
+                      placeholder="seuemail@provedor.com"
+                      autoCapitalize="none"
+                      spellCheck="false"
+                      required
+                    />
+                  </div>
+
+                  {/* CPF com máscara */}
+                  <div className="ck-field">
+                    <label>CPF *</label>
+                    <input
+                      className="input-field"
+                      value={cliente.cpf}
+                      onChange={e => setCliente({ ...cliente, cpf: formatCpf(e.target.value) })}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      required
+                    />
+                  </div>
+
+                  {/* Telefone com máscara */}
+                  <div className="ck-field ck-field-full">
+                    <label>WhatsApp / Telefone *</label>
+                    <input
+                      className="input-field"
+                      value={cliente.telefone}
+                      onChange={e => setCliente({ ...cliente, telefone: formatPhone(e.target.value) })}
+                      placeholder="(00) 00000-0000"
+                      maxLength={15}
+                      required
+                    />
+                  </div>
+
+                  {/* Criação OBRIGATÓRIA de conta e senha se não estiver logado */}
+                  {!isCustomerLoggedIn && (
+                    <div style={{
+                      gridColumn: '1 / -1',
+                      background: 'rgba(0, 158, 227, 0.04)',
+                      border: '1px solid rgba(0, 158, 227, 0.25)',
+                      borderRadius: '12px',
+                      padding: '14px 16px',
+                      margin: '6px 0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Lock size={16} style={{ color: 'var(--lime-dark)' }} />
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark-900)' }}>
+                          Defina sua Senha de Acesso * (Obrigatória para rastreio)
+                        </span>
+                      </div>
+
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showCreatePassword ? 'text' : 'password'}
+                          className="input-field"
+                          value={createPassword}
+                          onChange={e => setCreatePassword(e.target.value)}
+                          placeholder="Crie uma senha de acesso (mínimo 4 caracteres)"
+                          style={{ paddingRight: 40 }}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCreatePassword(!showCreatePassword)}
+                          style={{
+                            position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dark-400)'
+                          }}
+                          tabIndex={-1}
+                          title={showCreatePassword ? 'Ocultar senha' : 'Ver senha'}
+                        >
+                          {showCreatePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+
+                      <span style={{ fontSize: '11.5px', color: 'var(--dark-600)', lineHeight: '1.4' }}>
+                        🔒 Sua conta será criada automaticamente com esta senha para você acompanhar o rastreio dos Correios e emitir comprovantes na Área do Cliente.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* CEP com máscara e busca automática */}
+                  <div className="ck-field ck-field-full">
+                    <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>CEP (Busca nos Correios) *</span>
+                      {isCepLoading && (
+                        <span style={{ fontSize: '11px', color: 'var(--lime-dark)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Loader2 size={12} className="animate-spin" /> Buscando...
+                        </span>
+                      )}
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        className="input-field"
+                        value={cliente.cep}
+                        onChange={e => handleCepChange(e.target.value)}
+                        placeholder="00000-000"
+                        maxLength={9}
+                        required
+                      />
+                      <MapPin size={16} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dark-400)', pointerEvents: 'none' }} />
+                    </div>
+                  </div>
+
+                  {/* Feedback da busca de CEP */}
+                  {cepFeedback && (
+                    <div className={`ck-field ck-field-full ck-cep-feedback ${cepFeedback.type}`}>
+                      {cepFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                      <span>{cepFeedback.message}</span>
+                    </div>
+                  )}
+
+                  {/* Endereço / Logradouro */}
+                  <div className="ck-field ck-field-full">
+                    <label>Rua / Logradouro *</label>
+                    <input
+                      className="input-field"
+                      value={cliente.endereco}
+                      onChange={e => setCliente({ ...cliente, endereco: e.target.value })}
+                      placeholder="Ex: Rua das Acácias, SCS Quadra 01..."
+                      required
+                    />
+                  </div>
+
+                  {/* Linha 1: Número e Complemento */}
+                  <div className="ck-grid-num-comp">
+                    <div className="ck-field">
+                      <label>Número *</label>
+                      <input
+                        className="input-field"
+                        value={cliente.numero}
+                        onChange={e => setCliente({ ...cliente, numero: e.target.value })}
+                        placeholder="Ex: 120 ou S/N"
+                        required
+                      />
+                    </div>
+
+                    <div className="ck-field">
+                      <label>Complemento</label>
+                      <input
+                        className="input-field"
+                        value={cliente.complemento}
+                        onChange={e => setCliente({ ...cliente, complemento: e.target.value })}
+                        placeholder="Apto, Bloco, Sala..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha 2: Bairro, Cidade e Estado */}
+                  <div className="ck-grid-bairro-cidade-uf">
+                    <div className="ck-field">
+                      <label>Bairro *</label>
+                      <input
+                        className="input-field"
+                        value={cliente.bairro}
+                        onChange={e => setCliente({ ...cliente, bairro: e.target.value })}
+                        placeholder="Ex: Asa Sul, Centro, Jardins..."
+                        required
+                      />
+                    </div>
+
+                    <div className="ck-field">
+                      <label>Cidade *</label>
+                      <input
+                        className="input-field"
+                        value={cliente.cidade}
+                        onChange={e => setCliente({ ...cliente, cidade: e.target.value })}
+                        placeholder="Ex: Brasília"
+                        required
+                      />
+                    </div>
+
+                    <div className="ck-field">
+                      <label>Estado *</label>
+                      <input
+                        className="input-field"
+                        value={cliente.estado}
+                        onChange={e => setCliente({ ...cliente, estado: e.target.value.toUpperCase() })}
+                        placeholder="DF"
+                        maxLength={2}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  className="btn btn-primary btn-lg ck-next"
+                  onClick={handleStep1Submit}
+                  disabled={
+                    !cliente.nome || !cliente.email || !cliente.cpf || !cliente.cep || !cliente.endereco ||
+                    (!isCustomerLoggedIn && (!createPassword || createPassword.trim().length < 4))
+                  }
+                >
+                  Prosseguir para Frete dos Correios
+                </button>
+              </>
+            )}
             </div>
           )}
 
@@ -524,36 +1005,136 @@ export default function CheckoutModal() {
             <div className="ck-form">
               <button className="btn btn-ghost ck-back" onClick={() => setStep(2)}><ArrowLeft size={16} /> Voltar</button>
               <h3>Forma de Pagamento</h3>
-              <div className="ck-payment-options">
-                <div className={`ck-payment-card ${paymentMethod === 'boleto' ? 'selected' : ''}`} onClick={() => setPaymentMethod('boleto')}>
-                  <FileText size={28} />
-                  <strong>Boleto Bancário</strong>
-                  <span>Vencimento em 3 dias úteis</span>
-                  <span className="ck-payment-price">R$ {total.toFixed(2).replace('.', ',')}</span>
-                </div>
-                <div className={`ck-payment-card ${paymentMethod === 'pix' ? 'selected' : ''}`} onClick={() => setPaymentMethod('pix')}>
-                  <QrCode size={28} />
-                  <strong>Pix Instantâneo</strong>
-                  <span style={{ color: '#16a34a', fontWeight: 600 }}>Chave QR Code (3% OFF à vista)</span>
-                  <span className="ck-payment-price" style={{ color: '#16a34a', fontWeight: 800 }}>
-                    R$ {pixTotal.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-                <div className={`ck-payment-card ${paymentMethod === 'link' ? 'selected' : ''}`} onClick={() => setPaymentMethod('link')}>
-                  <CreditCard size={28} />
-                  <strong>Cartão de Crédito</strong>
-                  <span>Até 12x no cartão</span>
-                  <span className="ck-payment-price">R$ {total.toFixed(2).replace('.', ',')}</span>
+              
+              <div className="ck-payment-options" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Mercado Pago Checkout Pro (Único Gateway Oficial) */}
+                <div
+                  className="ck-payment-card ck-payment-mp selected"
+                  onClick={() => setPaymentMethod('mercadopago')}
+                  style={{
+                    border: '2px solid #009ee3',
+                    background: 'linear-gradient(180deg, rgba(0, 158, 227, 0.06) 0%, rgba(255, 255, 255, 0.95) 100%)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    padding: '24px 20px',
+                    borderRadius: '12px',
+                    textAlign: 'left',
+                    boxShadow: '0 4px 16px rgba(0, 158, 227, 0.08)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    background: '#009ee3',
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '4px 12px',
+                    borderBottomLeftRadius: '8px',
+                    letterSpacing: '0.5px'
+                  }}>
+                    CHECKOUT OFICIAL & SEGURO
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                    <div style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '10px',
+                      background: '#e0f2fe',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#009ee3'
+                    }}>
+                      <ShieldCheck size={28} />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: '18px', color: '#0f172a', display: 'block', fontWeight: 800 }}>
+                        Mercado Pago Checkout Pro
+                      </strong>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>
+                        Pague com PIX, Cartão até 12x ou Boleto em ambiente seguro
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Badges de Formas Suportadas */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                    gap: '10px',
+                    margin: '14px 0',
+                    padding: '12px',
+                    background: '#ffffff',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></span>
+                      <strong>PIX Instantâneo</strong>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0284c7' }}></span>
+                      <strong>Cartão de Crédito</strong> (até 12x)
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }}></span>
+                      <strong>Boleto Bancário</strong>
+                    </div>
+                  </div>
+
+                  {/* Preço e Garantia */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>
+                      🔒 Criptografia ponta a ponta Mercado Pago
+                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Total do Pedido</span>
+                      <strong style={{ fontSize: '20px', color: '#009ee3', fontWeight: 800 }}>
+                        R$ {total.toFixed(2).replace('.', ',')}
+                      </strong>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <button className="btn btn-primary btn-lg ck-next" onClick={handleFinalize} disabled={!paymentMethod || isValidatingOrder}>
+
+              <button
+                className="btn btn-primary btn-lg ck-next"
+                onClick={handleFinalize}
+                disabled={!paymentMethod || isValidatingOrder || isCreatingMPOrder}
+                style={{
+                  background: '#009ee3',
+                  borderColor: '#009ee3',
+                  color: '#ffffff',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  padding: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  boxShadow: '0 4px 12px rgba(0, 158, 227, 0.25)',
+                  marginTop: '8px'
+                }}
+              >
                 {isValidatingOrder ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  <>
                     <Loader2 className="spinner" size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                    Validando com os Correios...
-                  </span>
+                    Validando Pedido...
+                  </>
+                ) : isCreatingMPOrder ? (
+                  <>
+                    <Loader2 className="spinner" size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                    Conectando ao Mercado Pago Seguro...
+                  </>
                 ) : (
-                  `Finalizar Pedido — R$ ${(paymentMethod === 'pix' ? pixTotal : total).toFixed(2).replace('.', ',')}`
+                  <>
+                    <ShieldCheck size={20} />
+                    Pagar com Mercado Pago — R$ {total.toFixed(2).replace('.', ',')}
+                  </>
                 )}
               </button>
             </div>

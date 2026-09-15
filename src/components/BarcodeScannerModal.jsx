@@ -11,10 +11,13 @@ import {
   identifyProductByPhoto,
   confirmProductPhotoMatch
 } from '../services/barcodeService'
+import { getCompanyPublicName } from '../services/companyService'
 import BarcodeLabel from './BarcodeLabel'
 
 export default function BarcodeScannerModal() {
-  const { showScanner, setShowScanner, products = [], addProduct, showToast, setShowAdminDashboard } = useStore()
+  const { showScanner, setShowScanner, products = [], addProduct, showToast, setShowAdminDashboard, companyData } = useStore()
+
+  const publicName = getCompanyPublicName(companyData)
 
   const [activeTab, setActiveTab] = useState('barcode') // 'barcode' | 'photo' | 'label'
   const [scanning, setScanning] = useState(false)
@@ -244,7 +247,7 @@ export default function BarcodeScannerModal() {
       // 2. Adiciona ao catálogo/estoque da loja
       addProduct({
         name: item.name,
-        brand: item.brand || 'Infodesk',
+        brand: item.brand || publicName,
         category: item.category || 'Hardware',
         costPrice: cost,
         taxRate: 10,
@@ -371,7 +374,7 @@ export default function BarcodeScannerModal() {
 
     addProduct({
       name: item.name,
-      brand: item.brand || 'Infodesk',
+      brand: item.brand || publicName,
       category: item.category || 'Hardware',
       costPrice: cost,
       taxRate: 10,
@@ -1264,7 +1267,7 @@ export default function BarcodeScannerModal() {
                         className="input-field"
                         value={customProduct.brand}
                         onChange={e => setCustomProduct({ ...customProduct, brand: e.target.value })}
-                        placeholder="Ex: Infodesk"
+                        placeholder={`Ex: ${publicName}`}
                       />
                     </div>
                     <div className="ck-field">

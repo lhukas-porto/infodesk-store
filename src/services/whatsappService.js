@@ -1,10 +1,19 @@
-// Serviço Utilitário para Notificações Comerciais via WhatsApp da Infodesk Store
+// Serviço Utilitário para Notificações Comerciais via WhatsApp
 // Gera links diretos wa.me com mensagens pré-formatadas profissionais e limpas
 
-import { getCompanyPublicName, getCompanyFullAddress } from './companyService'
+import { getCompanyPublicName, getCompanyFullAddress } from './companyService.js'
 
-export const STORE_WHATSAPP = '5561996272630'
-export const STORE_NAME = 'Infodesk Informática'
+function resolveCompanyData(provided) {
+  if (provided) return provided
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('infodesk_company_data') : null
+    if (saved) return JSON.parse(saved)
+  } catch {}
+  return null
+}
+
+export const STORE_WHATSAPP = ''
+export const STORE_NAME = 'Minha Loja'
 
 /**
  * Limpa e formata o número de telefone para o padrão internacional do WhatsApp (55 + DDD + Número)
@@ -28,8 +37,9 @@ export function formatPhoneForWhatsApp(phone) {
  * Gera mensagem de lembrete de pagamento para pedidos Pendentes
  */
 export function buildPaymentReminderMessage(order, companyData = null) {
-  const storeName = companyData ? getCompanyPublicName(companyData) : STORE_NAME
-  const cnpjStr = companyData?.cnpj ? ` · CNPJ ${companyData.cnpj}` : ' · CNPJ 15.266.716/0001-02'
+  const company = resolveCompanyData(companyData)
+  const storeName = getCompanyPublicName(company)
+  const cnpjStr = company?.cnpj ? ` · CNPJ ${company.cnpj}` : ''
   const clienteNome = (order.cliente?.nome || 'Cliente').split(' ')[0]
   const total = (order.total || 0).toFixed(2).replace('.', ',')
   const pedidoId = order.id || ''
@@ -57,8 +67,9 @@ export function buildPaymentReminderMessage(order, companyData = null) {
  * Gera mensagem de envio com código de rastreio dos Correios
  */
 export function buildShippingNotificationMessage(order, companyData = null) {
-  const storeName = companyData ? getCompanyPublicName(companyData) : STORE_NAME
-  const addressStr = companyData ? getCompanyFullAddress(companyData) : 'CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília - DF'
+  const company = resolveCompanyData(companyData)
+  const storeName = getCompanyPublicName(company)
+  const addressStr = getCompanyFullAddress(company)
   const clienteNome = (order.cliente?.nome || 'Cliente').split(' ')[0]
   const pedidoId = order.id || ''
   const trackingCode = order.trackingCode || ''
@@ -83,7 +94,8 @@ export function buildShippingNotificationMessage(order, companyData = null) {
  * Gera mensagem de entrega concluída
  */
 export function buildDeliveredNotificationMessage(order, companyData = null) {
-  const storeName = companyData ? getCompanyPublicName(companyData) : STORE_NAME
+  const company = resolveCompanyData(companyData)
+  const storeName = getCompanyPublicName(company)
   const clienteNome = (order.cliente?.nome || 'Cliente').split(' ')[0]
   const pedidoId = order.id || ''
 
@@ -99,7 +111,8 @@ export function buildDeliveredNotificationMessage(order, companyData = null) {
  * Gera mensagem para o próprio cliente enviar à loja no pós-checkout
  */
 export function buildCustomerOrderSupportMessage(order, companyData = null) {
-  const storeName = companyData ? getCompanyPublicName(companyData) : STORE_NAME
+  const company = resolveCompanyData(companyData)
+  const storeName = getCompanyPublicName(company)
   const pedidoId = order.id || ''
   const clienteNome = order.cliente?.nome || 'Cliente'
 

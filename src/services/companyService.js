@@ -2,29 +2,30 @@
 // Permite que qualquer empresa configure seus dados cadastrais e identidade visual
 
 export const DEFAULT_COMPANY_DATA = {
-  razaoSocial: 'INFODESK INFORMÁTICA LTDA',
-  nomeFantasia: 'Infodesk Store',
-  cnpj: '15.266.716/0001-02',
+  razaoSocial: 'NOME FANTASIA DA EMPRESA LTDA',
+  nomeFantasia: 'Minha Loja',
+  cnpj: '',
   inscricaoEstadual: '',
   inscricaoMunicipal: '',
-  emailPrincipal: 'lucas@infodesk.net.br',
-  emailAtendimento: 'contato@infodesk.net.br',
-  telefone: '(61) 3033-5373',
-  whatsapp: '(61) 9 9627-2630',
-  site: 'https://infodesk.net.br',
-  cep: '70673-631',
-  endereco: 'CLSW 304 Bloco A',
-  numero: 'Sala 108',
-  complemento: 'Bloco A Sala 108',
-  bairro: 'Sudoeste',
-  cidade: 'Brasília',
-  estado: 'DF',
+  emailPrincipal: 'contato@minhaloja.com.br',
+  emailAtendimento: 'atendimento@minhaloja.com.br',
+  telefone: '',
+  whatsapp: '',
+  site: 'https://minhaloja.com.br',
+  cep: '',
+  endereco: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
+  cidade: '',
+  estado: '',
   pais: 'Brasil',
   logo: '', // Se vazio, usa a logo padrão do assets ou exibe o nome em texto
-  logoAlt: 'Infodesk Store',
+  logoAlt: 'Minha Loja',
   favicon: '/favicon.jpg',
-  descricaoCurta: 'Variedades, eletrônicos, escritório, utilidades e tecnologia com frete rápido e atendimento especializado.'
+  descricaoCurta: 'Sua loja online com frete rápido e atendimento especializado.'
 }
+
 
 /**
  * Aplica máscara de CNPJ (00.000.000/0000-00)
@@ -126,8 +127,8 @@ export function isValidUrl(url) {
  * Retorna o nome público da empresa (Nome Fantasia como prioridade; se não houver, Razão Social)
  */
 export function getCompanyPublicName(company) {
-  if (!company) return 'Infodesk Store'
-  return company.nomeFantasia?.trim() || company.razaoSocial?.trim() || 'Infodesk Store'
+  if (!company) return 'Minha Loja'
+  return company.nomeFantasia?.trim() || company.razaoSocial?.trim() || 'Minha Loja'
 }
 
 /**

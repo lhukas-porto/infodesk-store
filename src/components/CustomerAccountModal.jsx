@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import {
   X, User, Package, MapPin, Phone, Mail, FileText, CheckCircle2,
   Calendar, CreditCard, ExternalLink, Copy, AlertCircle, Save, Loader2,
-  Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Sparkles, Truck
+  Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Truck
 } from 'lucide-react'
+
 import { useStore } from '../context/StoreContext'
 import {
   formatCep,
@@ -12,6 +13,7 @@ import {
   consultarCep
 } from '../services/correiosService'
 import { gerarBoletoPDF } from '../services/paymentService'
+import { getCompanyPublicName } from '../services/companyService'
 
 export default function CustomerAccountModal() {
   const {
@@ -25,8 +27,11 @@ export default function CustomerAccountModal() {
     logoutCustomer,
     orders,
     showToast,
-    openTrackingModal
+    openTrackingModal,
+    companyData
   } = useStore()
+
+  const publicName = getCompanyPublicName(companyData)
 
   // Abas quando autenticado: 'profile' | 'orders'
   const [activeTab, setActiveTab] = useState('profile')
@@ -200,13 +205,7 @@ export default function CustomerAccountModal() {
     }
   }
 
-  // Preencher credenciais de teste para praticidade
-  const handleFillTestCredentials = () => {
-    setLoginId('lucas@infodesk.net.br')
-    setLoginPassword('123')
-    setLoginError('')
-    showToast('Dados de teste preenchidos! Clique em Entrar. 👤')
-  }
+
 
   // Consulta de CEP para endereço de cadastro ou edição
   const handleCepLookup = async (val, isRegister = false) => {
@@ -309,7 +308,7 @@ export default function CustomerAccountModal() {
                 ? `${customerProfile?.email || formData?.email || ''} • Gerencie seus dados e acompanhe seus pedidos`
                 : authTab === 'login'
                   ? 'Se você já tem cadastro, faça login com seu e-mail/CPF e senha'
-                  : 'Preencha o formulário abaixo para se cadastrar na Infodesk Store'}
+                  : `Preencha o formulário abaixo para se cadastrar na ${publicName}`}
             </span>
           </div>
         </div>
@@ -407,23 +406,7 @@ export default function CustomerAccountModal() {
                       </button>
                     </form>
 
-                    {/* Dica / Acesso Rápido */}
-                    <div className="cust-demo-box">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Sparkles size={16} style={{ color: 'var(--lime-dark)' }} />
-                        <strong>Conta de Demonstração / Teste Rápido</strong>
-                      </div>
-                      <p style={{ fontSize: '12px', color: 'var(--dark-500)', margin: '4px 0 8px' }}>
-                        Para testar rapidamente, utilize: <code>lucas@infodesk.net.br</code> com senha <code>123</code>.
-                      </p>
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        onClick={handleFillTestCredentials}
-                      >
-                        Preencher Dados de Teste
-                      </button>
-                    </div>
+
 
                     {/* Alternar para Cadastro */}
                     <div className="cust-auth-footer">

@@ -1,11 +1,15 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js'
+import { slugify } from './seoManager.js'
 
-// Conversores snake_case <-> camelCase para Produtos
+// Conversores snake_case <-> camelCase para Produtos (com suporte a SEO e Multiempresa)
 export function mapDbProductToApp(dbProd) {
   if (!dbProd) return null
+  const slug = dbProd.slug || slugify(dbProd.name)
   return {
     id: dbProd.id,
+    companyId: dbProd.company_id || 'default',
     name: dbProd.name,
+    slug,
     brand: dbProd.brand || '',
     category: dbProd.category || 'Outros',
     description: dbProd.description || '',
@@ -29,6 +33,18 @@ export function mapDbProductToApp(dbProd) {
     length: parseInt(dbProd.length_cm, 10) || 20,
     width: parseInt(dbProd.width_cm, 10) || 15,
     height: parseInt(dbProd.height_cm, 10) || 10,
+    // Campos de SEO & Divulgação Orgânica
+    seo_title: dbProd.seo_title || `${dbProd.name}`,
+    seo_description: dbProd.seo_description || dbProd.description || '',
+    image_alt: dbProd.image_alt || dbProd.name,
+    primary_keyword: dbProd.primary_keyword || '',
+    mpn: dbProd.mpn || '',
+    google_category: dbProd.google_category || '',
+    is_anchor: Boolean(dbProd.is_anchor),
+    weekly_offer: Boolean(dbProd.weekly_offer),
+    merchant_include: dbProd.merchant_include !== false,
+    merchant_status: dbProd.merchant_status || 'eligible',
+    merchant_exclusion_reason: dbProd.merchant_exclusion_reason || '',
     createdAt: dbProd.created_at,
     updatedAt: dbProd.updated_at
   }
@@ -43,8 +59,12 @@ export function mapAppProductToDb(appProd) {
     specs.push({ label: 'Peso', value: `${appProd.weight}g` })
   }
 
+  const slug = appProd.slug || slugify(appProd.name)
+
   return {
+    company_id: appProd.companyId || appProd.company_id || 'default',
     name: appProd.name,
+    slug,
     brand: appProd.brand || '',
     category: appProd.category || 'Outros',
     description: appProd.description || '',
@@ -63,18 +83,29 @@ export function mapAppProductToDb(appProd) {
     sold: parseInt(appProd.sold) || 0,
     featured: Boolean(appProd.featured),
     ean: appProd.ean || '',
-    active: appProd.active !== false
+    active: appProd.active !== false,
+    // Campos de SEO & Divulgação Orgânica
+    seo_title: appProd.seo_title || appProd.name,
+    seo_description: appProd.seo_description || appProd.description || '',
+    image_alt: appProd.image_alt || appProd.name,
+    primary_keyword: appProd.primary_keyword || '',
+    mpn: appProd.mpn || '',
+    google_category: appProd.google_category || '',
+    is_anchor: Boolean(appProd.is_anchor),
+    weekly_offer: Boolean(appProd.weekly_offer),
+    merchant_include: appProd.merchant_include !== false,
+    merchant_status: appProd.merchant_status || 'eligible',
+    merchant_exclusion_reason: appProd.merchant_exclusion_reason || ''
   }
 }
 
 // === PRODUTOS ===
-export async function fetchProductsFromDb() {
+export async function fetchProductsFromDb(companyId = 'default') {
   if (!isSupabaseConfigured || !supabase) return null
   try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false })
+    let query = supabase.from('products').select('*')
+    // Se a tabela já tiver company_id, podemos filtrar ou trazer tudo para o catálogo
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error) {
       console.warn('Supabase: Erro ao buscar produtos:', error.message)
@@ -93,23 +124,49 @@ export async function upsertProductToDb(product) {
     const payload = mapAppProductToDb(product)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(product.id)
 
-    let query
     if (isUuid) {
       payload.id = product.id
-      query = await supabase
+    }
+
+    let res = await supabase
+      .from('products')
+      .upsert(payload)
+      .select()
+      .single()
+
+    // Fallback gracioso caso colunas novas de SEO ainda não tenham sido migradas no Supabase
+    if (res.error && res.error.message?.includes('column')) {
+      const basicPayload = {
+        name: payload.name,
+        brand: payload.brand,
+        category: payload.category,
+        description: payload.description,
+        specs: payload.specs,
+        images: payload.images,
+        cost_price: payload.cost_price,
+        tax_rate: payload.tax_rate,
+        margin_rate: payload.margin_rate,
+        price: payload.price,
+        original_price: payload.original_price,
+        installments: payload.installments,
+        installment_price: payload.installment_price,
+        stock: payload.stock,
+        rating: payload.rating,
+        reviews: payload.reviews,
+        sold: payload.sold,
+        featured: payload.featured,
+        ean: payload.ean,
+        active: payload.active
+      }
+      if (isUuid) basicPayload.id = product.id
+      res = await supabase
         .from('products')
-        .upsert(payload)
-        .select()
-        .single()
-    } else {
-      query = await supabase
-        .from('products')
-        .insert(payload)
+        .upsert(basicPayload)
         .select()
         .single()
     }
 
-    const { data, error } = query
+    const { data, error } = res
 
     if (error) {
       console.warn('Supabase: Erro ao salvar produto:', error.message)
@@ -126,24 +183,22 @@ export async function deleteProductFromDb(productId, productEan = null, productN
   if (!isSupabaseConfigured || !supabase) return false
   try {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId)
-    let query = supabase.from('products').delete()
 
     if (isUuid) {
-      query = query.eq('id', productId)
-    } else if (productEan) {
-      query = query.eq('ean', productEan)
-    } else if (productName) {
-      query = query.eq('name', productName)
-    } else {
-      return false
+      const { error } = await supabase.from('products').delete().eq('id', productId)
+      if (error) {
+        console.warn('Supabase: Erro ao deletar produto por ID:', error.message)
+        return false
+      }
     }
 
-    const { error } = await query
-
-    if (error) {
-      console.warn('Supabase: Erro ao deletar produto:', error.message)
-      return false
+    // Limpeza complementar para garantir que duplicatas órfãs com o mesmo EAN não persistam no banco
+    if (productEan && String(productEan).trim().length > 3) {
+      await supabase.from('products').delete().eq('ean', String(productEan).trim())
+    } else if (productName && !isUuid) {
+      await supabase.from('products').delete().eq('name', productName.trim())
     }
+
     return true
   } catch (err) {
     console.warn('Supabase: Falha de conexão ao deletar produto:', err)
@@ -176,26 +231,42 @@ export async function seedProductsToDb(initialList) {
 }
 
 // === CLIENTES ===
-export async function fetchCustomersFromDb() {
+export async function fetchCustomersFromDb(companyId = 'default', role = 'super_admin') {
   if (!isSupabaseConfigured || !supabase) return null
   try {
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .order('created_at', { ascending: false })
+    let query = supabase.from('customers').select('*').order('created_at', { ascending: false })
+
+    const { data, error } = await query
 
     if (error) {
       console.warn('Supabase: Erro ao buscar clientes:', error.message)
       return null
     }
-    return data || []
+
+    // Normaliza os dados e aplica fallback seguro
+    const list = (data || []).map(c => ({
+      ...c,
+      company_id: c.company_id || 'default',
+      status: c.status || 'Ativo',
+      internal_notes: c.internal_notes || '',
+      consent_marketing: Boolean(c.consent_marketing),
+      consent_whatsapp: c.consent_whatsapp !== false,
+      last_login_at: c.last_login_at || null,
+      anonymized_at: c.anonymized_at || null
+    }))
+
+    if (role === 'super_admin' || !companyId || companyId === 'default') {
+      return list
+    }
+
+    return list.filter(c => c.company_id === companyId)
   } catch (err) {
     console.warn('Supabase: Falha de conexão ao buscar clientes:', err)
     return null
   }
 }
 
-export async function upsertCustomerToDb(customer) {
+export async function upsertCustomerToDb(customer, companyId = 'default') {
   if (!isSupabaseConfigured || !supabase) return null
   try {
     const payload = {
@@ -203,34 +274,167 @@ export async function upsertCustomerToDb(customer) {
       email: customer.email?.toLowerCase()?.trim(),
       cpf: customer.cpf,
       telefone: customer.telefone,
-      password: customer.password,
+      password: customer.password || 'default_hash_guest',
       cep: customer.cep,
       endereco: customer.endereco,
       numero: customer.numero,
       complemento: customer.complemento,
       bairro: customer.bairro,
       cidade: customer.cidade,
-      estado: customer.estado
+      estado: customer.estado,
+      company_id: customer.company_id || companyId || 'default',
+      status: customer.status || 'Ativo',
+      internal_notes: customer.internal_notes || '',
+      consent_marketing: Boolean(customer.consent_marketing),
+      consent_whatsapp: customer.consent_whatsapp !== false
     }
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customer.id)
     if (isUuid) {
       payload.id = customer.id
     }
 
-    const { data, error } = await supabase
+    let res = await supabase
       .from('customers')
       .upsert(payload, { onConflict: 'email' })
       .select()
       .single()
 
-    if (error) {
-      console.warn('Supabase: Erro ao salvar cliente:', error.message)
+    // Fallback gracioso se colunas novas ainda não tiverem sido migradas no banco
+    if (res.error && res.error.message?.includes('column')) {
+      const basicPayload = {
+        nome: customer.nome,
+        email: customer.email?.toLowerCase()?.trim(),
+        cpf: customer.cpf,
+        telefone: customer.telefone,
+        password: customer.password,
+        cep: customer.cep,
+        endereco: customer.endereco,
+        numero: customer.numero,
+        complemento: customer.complemento,
+        bairro: customer.bairro,
+        cidade: customer.cidade,
+        estado: customer.estado
+      }
+      if (isUuid) basicPayload.id = customer.id
+      res = await supabase.from('customers').upsert(basicPayload, { onConflict: 'email' }).select().single()
+    }
+
+    if (res.error) {
+      console.warn('Supabase: Erro ao salvar cliente:', res.error.message)
       return null
     }
-    return data
+    return res.data
   } catch (err) {
     console.warn('Supabase: Falha ao salvar cliente:', err)
     return null
+  }
+}
+
+export async function updateCustomerInDb(customerId, updates) {
+  if (!isSupabaseConfigured || !supabase || !customerId) return false
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(customerId)
+    let query = supabase.from('customers').update(updates)
+    if (isUuid) {
+      query = query.eq('id', customerId)
+    } else {
+      query = query.eq('email', updates.email || '')
+    }
+    const { error } = await query
+    if (error) {
+      console.warn('Supabase: Erro ao atualizar cliente:', error.message)
+      if (error.message?.includes('column') || error.message?.includes('schema cache')) {
+        const basicUpdates = { ...updates }
+        delete basicUpdates.internal_notes
+        delete basicUpdates.company_id
+        delete basicUpdates.status
+        delete basicUpdates.consent_marketing
+        delete basicUpdates.consent_whatsapp
+        delete basicUpdates.anonymized_at
+
+        if (Object.keys(basicUpdates).length > 0) {
+          let retryQuery = supabase.from('customers').update(basicUpdates)
+          if (isUuid) retryQuery = retryQuery.eq('id', customerId)
+          else retryQuery = retryQuery.eq('email', updates.email || '')
+          const retryRes = await retryQuery
+          return !retryRes.error
+        }
+        return true
+      }
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('Supabase: Falha de conexão ao atualizar cliente:', err)
+    return false
+  }
+}
+
+// === AUDITORIA ADMINISTRATIVA (LGPD) ===
+export async function logCustomerAuditAction(logData) {
+  const fullLog = {
+    id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    company_id: logData.company_id || 'default',
+    customer_id: logData.customer_id,
+    actor_name: logData.actor_name || 'Administrador',
+    actor_email: logData.actor_email || 'admin@infodesk.net.br',
+    actor_role: logData.actor_role || 'super_admin',
+    action: logData.action,
+    details: logData.details || {},
+    created_at: new Date().toISOString()
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('customer_audit_logs').insert([{
+        company_id: fullLog.company_id,
+        customer_id: fullLog.customer_id,
+        actor_name: fullLog.actor_name,
+        actor_email: fullLog.actor_email,
+        actor_role: fullLog.actor_role,
+        action: fullLog.action,
+        details: fullLog.details
+      }])
+    } catch (err) {
+      console.warn('Supabase audit log warning:', err)
+    }
+  }
+
+  try {
+    const saved = localStorage.getItem('infodesk_customer_audit_logs')
+    const list = saved ? JSON.parse(saved) : []
+    const updated = [fullLog, ...list].slice(0, 300)
+    localStorage.setItem('infodesk_customer_audit_logs', JSON.stringify(updated))
+  } catch {}
+
+  return fullLog
+}
+
+export async function fetchCustomerAuditLogs(customerId = null, companyId = 'default') {
+  let cloudLogs = []
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let query = supabase.from('customer_audit_logs').select('*').order('created_at', { ascending: false }).limit(100)
+      if (customerId) query = query.eq('customer_id', customerId)
+      const { data, error } = await query
+      if (!error && data) cloudLogs = data
+    } catch {}
+  }
+
+  try {
+    const saved = localStorage.getItem('infodesk_customer_audit_logs')
+    const localLogs = saved ? JSON.parse(saved) : []
+    const all = [...cloudLogs, ...localLogs]
+    const seen = new Set()
+    return all.filter(l => {
+      const key = l.id || (l.action + l.created_at)
+      if (seen.has(key)) return false
+      seen.add(key)
+      if (customerId && l.customer_id !== customerId) return false
+      return true
+    }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  } catch {
+    return cloudLogs
   }
 }
 
@@ -241,6 +445,7 @@ export async function fetchOrdersFromDb() {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
+      .neq('status', 'Deletado')
       .order('created_at', { ascending: false })
 
     if (error) {

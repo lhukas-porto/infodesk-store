@@ -1,5 +1,14 @@
 // Serviço de Geração de Código de Barras EAN-13 e Etiquetas Infodesk
 import jsPDF from 'jspdf'
+import { getCompanyPublicName } from './companyService'
+
+function getCompanyDataLocal() {
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('infodesk_company_data') : null
+    if (saved) return JSON.parse(saved)
+  } catch {}
+  return null
+}
 
 // Calcula o dígito verificador módulo 10 para código EAN-13
 export function calculateEanChecksum(code12) {
@@ -74,15 +83,16 @@ export function generateBarcodeLabelPDF({ product, ean, price }) {
     format: [60, 40]
   })
 
-  // Cabeçalho da Infodesk
+  // Cabeçalho da Loja
+  const storeHeader = getCompanyPublicName(getCompanyDataLocal()).toUpperCase()
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
-  doc.text('INFODESK INFORMÁTICA', 30, 5, { align: 'center' })
+  doc.text(storeHeader, 30, 5, { align: 'center' })
 
   // Nome do produto (truncado para caber)
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
-  const name = (product?.name || 'PRODUTO INFODESK').toUpperCase()
+  const name = (product?.name || 'PRODUTO').toUpperCase()
   const splitName = doc.splitTextToSize(name, 54)
   doc.text(splitName.slice(0, 2), 30, 9, { align: 'center' })
 

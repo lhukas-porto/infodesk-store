@@ -107,6 +107,96 @@ function correiosApiPlugin() {
             return
           }
         }
+        // Mercado Pago Checkout Pro (Orders API)
+        if (url === '/api/payments/mercadopago/create-order') {
+          try {
+            const { default: handler } = await import('./api/payments/mercadopago/create-order.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/payments/mercadopago/create-order:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
+        if (url === '/api/payments/mercadopago/webhook') {
+          try {
+            const { default: handler } = await import('./api/payments/mercadopago/webhook.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/payments/mercadopago/webhook:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
+        if (url === '/api/payments/mercadopago/status') {
+          try {
+            const { default: handler } = await import('./api/payments/mercadopago/status.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/payments/mercadopago/status:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
+        if (url === '/api/payments/mercadopago/test-connection') {
+          try {
+            const { default: handler } = await import('./api/payments/mercadopago/test-connection.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/payments/mercadopago/test-connection:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
+        // SEO & Divulgação Orgânica Multiloja
+        if (url === '/sitemap.xml') {
+          try {
+            const { default: handler } = await import('./api/seo/sitemap.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /sitemap.xml:', err)
+            res.statusCode = 500
+            res.end('Erro interno ao gerar sitemap.')
+            return
+          }
+        }
+        if (url === '/robots.txt') {
+          try {
+            const { default: handler } = await import('./api/seo/robots.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /robots.txt:', err)
+            res.statusCode = 500
+            res.end('Erro interno ao gerar robots.')
+            return
+          }
+        }
+        if (url === '/api/google-merchant/feed.xml') {
+          try {
+            const { default: handler } = await import('./api/google-merchant/feed.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/google-merchant/feed.xml:', err)
+            res.statusCode = 500
+            res.end('Erro interno ao gerar feed do Google Merchant.')
+            return
+          }
+        }
+        if (url === '/api/seo/tenant-lookup') {
+          try {
+            const { default: handler } = await import('./api/seo/tenant-lookup.js')
+            return await handler(req, res)
+          } catch (err) {
+            console.error('Erro no middleware local /api/seo/tenant-lookup:', err)
+            res.statusCode = 500
+            res.end(JSON.stringify({ success: false, error: err.message }))
+            return
+          }
+        }
         next()
       })
     }

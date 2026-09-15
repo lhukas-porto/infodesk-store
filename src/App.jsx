@@ -2,6 +2,7 @@ import React from 'react'
 import { Zap, Flame, Star, ArrowRight } from 'lucide-react'
 import { useStore } from './context/StoreContext'
 import { categories as categoryList } from './data/initialProducts'
+import { getCompanyPublicName } from './services/companyService'
 import Header from './components/Header'
 import Footer from './components/Footer'
 import ProductCard from './components/ProductCard'
@@ -17,13 +18,115 @@ import BrandCarousel from './components/BrandCarousel'
 import ProductSortFilter from './components/ProductSortFilter'
 import CepModal from './components/CepModal'
 import TrackingModal from './components/TrackingModal'
+import PaymentReturnModal from './components/PaymentReturnModal'
+import { resolveCurrentTenant } from './services/tenantResolver'
+import { getMarketingSettings } from './services/marketingService'
+import { applyStoreSeo } from './services/seoManager'
+import { initGoogleAnalytics } from './services/analyticsService'
+import { captureUtmParameters } from './services/utmTracker'
 
 export default function App() {
   const {
+    products,
     filteredProducts, featuredProducts,
     activeCategory, setActiveCategory,
+    selectedProduct, setSelectedProduct,
     toast,
+    companyData,
   } = useStore()
+
+  const [paymentReturnInfo, setPaymentReturnInfo] = React.useState(null)
+  const [marketingSettings, setMarketingSettings] = React.useState(null)
+
+  // 1. Captura inicial de UTMs e resolução de tenant
+  React.useEffect(() => {
+    // Captura parâmetros de campanhas orgânicas/pagas na sessão
+    captureUtmParameters()
+
+    // Resolve o tenant atual e inicializa SEO e GA4
+    async function initStoreMarketing() {
+      try {
+        const tenant = await resolveCurrentTenant()
+        const settings = await getMarketingSettings(tenant.tenantId)
+        setMarketingSettings(settings)
+
+        // Aplica SEO padrão da loja (Meta tags, Open Graph, Twitter Cards, Schema.org)
+        applyStoreSeo({
+          ...settings,
+          storeName: getCompanyPublicName(companyData),
+          companyData
+        })
+
+        // Inicializa GA4 se configurado e ativado pelo tenant
+        initGoogleAnalytics(settings.analytics_measurement_id, settings.analytics_enabled)
+      } catch (err) {
+        console.warn('Falha na inicialização do marketing/SEO:', err)
+      }
+    }
+
+    initStoreMarketing()
+  }, [companyData])
+
+  // 2. Sincroniza SEO de volta para a vitrine quando o produto é fechado
+  React.useEffect(() => {
+    if (!selectedProduct && marketingSettings) {
+      applyStoreSeo({
+        ...marketingSettings,
+        storeName: getCompanyPublicName(companyData),
+        companyData
+      })
+    }
+  }, [selectedProduct, marketingSettings, companyData])
+
+  // 3. Suporte a URLs amigáveis com hash: #product-[slug_ou_id]
+  React.useEffect(() => {
+    function handleProductHashRoute() {
+      const hash = window.location.hash || ''
+      if (hash.startsWith('#product-') && products?.length > 0) {
+        const identifier = hash.replace('#product-', '')
+        const found = products.find(p => (p.slug && p.slug === identifier) || String(p.id) === identifier)
+        if (found) {
+          setSelectedProduct(found)
+        }
+      }
+    }
+
+    handleProductHashRoute()
+    window.addEventListener('hashchange', handleProductHashRoute)
+    return () => window.removeEventListener('hashchange', handleProductHashRoute)
+  }, [products, setSelectedProduct])
+
+  React.useEffect(() => {
+    function checkPaymentReturn() {
+      const hash = window.location.hash || ''
+      const search = window.location.search || ''
+
+      let params = null
+      if (hash.includes('payment-return')) {
+        const queryStr = hash.split('?')[1] || ''
+        params = new URLSearchParams(queryStr)
+      } else if (search.includes('order_id') || search.includes('collection_status') || search.includes('status')) {
+        params = new URLSearchParams(search)
+      }
+
+      if (params) {
+        const orderId = params.get('order_id') || params.get('external_reference')
+        const status = params.get('status') || params.get('collection_status')
+        if (orderId || status) {
+          setPaymentReturnInfo({
+            orderId: orderId || 'ORD-RECENT',
+            status: status || 'pending'
+          })
+        }
+      }
+    }
+
+    checkPaymentReturn()
+    window.addEventListener('hashchange', checkPaymentReturn)
+    return () => window.removeEventListener('hashchange', checkPaymentReturn)
+  }, [])
+
+  const publicName = getCompanyPublicName(companyData)
 
   return (
     <div className="app">
@@ -41,7 +144,7 @@ export default function App() {
                 Tudo o que você precisa com a <span className="hero-highlight">qualidade e agilidade</span> que você merece
               </h1>
               <p className="hero-subtitle">
-                Eletrônicos, tecnologia, escritório, utilidades, ferramentas e variedades. Se você precisa, a Infodesk tem — com frete rápido dos Correios e pagamento facilitado no Pix, Cartão ou Boleto.
+                Eletrônicos, tecnologia, escritório, utilidades, ferramentas e variedades. Se você precisa, a {publicName} tem — com frete rápido dos Correios e pagamento facilitado no Pix, Cartão ou Boleto.
               </p>
               <div className="hero-cta">
                 <a href="#products" className="btn btn-primary btn-lg">
@@ -133,6 +236,16 @@ export default function App() {
       <BarcodeScannerModal />
       <CepModal />
       <TrackingModal />
+      {paymentReturnInfo && (
+        <PaymentReturnModal
+          orderId={paymentReturnInfo.orderId}
+          statusParam={paymentReturnInfo.status}
+          onClose={() => {
+            setPaymentReturnInfo(null)
+            window.location.hash = ''
+          }}
+        />
+      )}
 
       {/* Toast */}
       {toast && (

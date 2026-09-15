@@ -114,7 +114,7 @@ export default function ShippingLabelModal({ order, onClose }) {
                 DESTINATÁRIO:
               </span>
               <div style={{ fontSize: '15px', fontWeight: 900, color: '#0f172a' }}>
-                {cliente.nome || 'Cliente Infodesk'}
+                {cliente.nome || 'Consumidor Final'}
               </div>
               <div style={{ fontSize: '13px', marginTop: '2px', color: '#1e293b' }}>
                 {cliente.endereco || 'Endereço não informado'}, {cliente.numero || 'S/N'} {cliente.complemento && `- ${cliente.complemento}`}

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap, MapPin } from 'lucide-react'
+import { X, ShoppingCart, Star, ChevronLeft, ChevronRight, Truck, Package, Zap, MapPin, Share2, Copy, Check, MessageCircle } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { calcularFrete, cotarFreteOficial, formatCep, getProductWeight } from '../services/correiosService'
+import { applyProductSeo } from '../services/seoManager'
+import { trackViewItem, trackAddToCart } from '../services/analyticsService'
+import { buildUtmUrl } from '../services/marketingService'
 
 export default function ProductModal() {
   const {
@@ -10,7 +13,9 @@ export default function ProductModal() {
     addToCart,
     globalCep,
     globalAddress,
-    setShowCepModal
+    setShowCepModal,
+    companyData,
+    showToast
   } = useStore()
 
   const [currentImg, setCurrentImg] = useState(0)
@@ -19,6 +24,39 @@ export default function ProductModal() {
   const [frete, setFrete] = useState(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [showSpecs, setShowSpecs] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+
+  // Dispara SEO dinâmico e rastreamento de visualização de produto (GA4)
+  useEffect(() => {
+    if (product) {
+      applyProductSeo(product, companyData)
+      trackViewItem(product)
+    }
+  }, [product, companyData])
+
+  const handleCopyProductLink = () => {
+    const rawUrl = `${window.location.origin}/#product-${product.slug || product.id}`
+    const utmUrl = buildUtmUrl(rawUrl, {
+      utm_source: 'share_direct',
+      utm_medium: 'referral',
+      utm_campaign: 'organic_product_share'
+    })
+    navigator.clipboard.writeText(utmUrl)
+    setCopiedLink(true)
+    if (showToast) showToast('Link do produto copiado com sucesso! 🔗')
+    setTimeout(() => setCopiedLink(false), 2500)
+  }
+
+  const handleShareWhatsApp = () => {
+    const rawUrl = `${window.location.origin}/#product-${product.slug || product.id}`
+    const utmUrl = buildUtmUrl(rawUrl, {
+      utm_source: 'whatsapp',
+      utm_medium: 'social_share',
+      utm_campaign: 'product_recommendation'
+    })
+    const text = `Confira este produto na ${companyData?.nomeFantasia || 'Infodesk'}: *${product.name}* por apenas R$ ${(parseFloat(product.price) || 0).toFixed(2).replace('.', ',')}!\n\nVeja aqui: ${utmUrl}`
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank')
+  }
 
   // Peso unitário e peso acumulado da quantidade selecionada
   const unitWeight = getProductWeight(product)
@@ -167,10 +205,40 @@ export default function ProductModal() {
             </div>
 
             {/* Add to Cart */}
-            <button className="btn btn-primary btn-lg pm-add-btn" onClick={() => { addToCart(product, qty); setSelectedProduct(null) }}>
+            <button
+              className="btn btn-primary btn-lg pm-add-btn"
+              onClick={() => {
+                addToCart(product, qty)
+                trackAddToCart(product, qty)
+                setSelectedProduct(null)
+              }}
+            >
               <ShoppingCart size={20} />
               Adicionar ao Carrinho — R$ {((parseFloat(product.price) || 0) * qty).toFixed(2).replace('.', ',')}
             </button>
+
+            {/* Social Share & Copy Link com UTM Rastreável */}
+            <div style={{ display: 'flex', gap: '8px', margin: '12px 0', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleShareWhatsApp}
+                style={{ flex: 1, minWidth: '150px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#16a34a', borderColor: '#86efac' }}
+                title="Compartilhar oferta via WhatsApp com rastreamento UTM"
+              >
+                <MessageCircle size={15} /> Compartilhar no Zap
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleCopyProductLink}
+                style={{ flex: 1, minWidth: '140px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                title="Copiar link rastreável do produto com UTM"
+              >
+                {copiedLink ? <Check size={15} style={{ color: 'var(--lime)' }} /> : <Copy size={15} />}
+                {copiedLink ? 'Link Copiado!' : 'Copiar Link'}
+              </button>
+            </div>
 
             {/* Freight */}
             <div className="pm-frete">

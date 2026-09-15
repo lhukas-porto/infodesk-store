@@ -5,9 +5,11 @@ import {
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import InfodeskLogo from '../assets/brand/InfodeskLogo'
+import { getCompanyPublicName } from '../services/companyService'
 
 export default function AdminLoginModal() {
-  const { showAdminLogin, setShowAdminLogin, loginAdmin, adminConfig } = useStore()
+  const { showAdminLogin, setShowAdminLogin, loginAdmin, adminConfig, companyData } = useStore()
+  const publicName = getCompanyPublicName(companyData)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -120,7 +122,19 @@ export default function AdminLoginModal() {
         {/* Modal Header */}
         <div className="adm-login-header">
           <div className="adm-login-logo">
-            <InfodeskLogo size={140} />
+            {companyData?.logo ? (
+              <img
+                src={companyData.logo}
+                alt={companyData.logoAlt || publicName}
+                style={{ maxHeight: 48, maxWidth: 200, objectFit: 'contain' }}
+              />
+            ) : publicName && publicName !== 'Infodesk Store' ? (
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'var(--lime-dark)' }}>
+                {publicName}
+              </h2>
+            ) : (
+              <InfodeskLogo size={140} />
+            )}
           </div>
           <div className="adm-badge-security">
             <Shield size={14} />
@@ -141,7 +155,7 @@ export default function AdminLoginModal() {
                 id="admin-email"
                 type="text"
                 className="input-field has-icon-left"
-                placeholder="ex: lucas@infodesk.net.br"
+                placeholder="ex: admin@suaempresa.com.br"
                 value={email}
                 onChange={e => { setEmail(e.target.value); setError('') }}
                 disabled={lockoutTimer > 0 || isLoading}

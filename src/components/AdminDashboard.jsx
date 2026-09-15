@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
-  X, Package, DollarSign, ShoppingCart, BarChart3, Plus,
+  X, Package, DollarSign, ShoppingCart, BarChart3, Plus, ArrowLeft,
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
-  Shield, KeyRound, User, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
+  Shield, KeyRound, User, Users, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
   Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
-  MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase
+  MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase, CreditCard
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { generateValidEan13 } from '../services/barcodeService'
@@ -15,6 +15,11 @@ import {
 } from '../services/pricingService'
 import { formatCep, consultarCep } from '../services/correiosService'
 import ShippingLabelModal from './ShippingLabelModal'
+import BarcodeLabel from './BarcodeLabel'
+import AdminCustomersSection from './admin/AdminCustomersSection'
+import AdminPaymentsSection from './admin/AdminPaymentsSection'
+import AdminMarketingSection from './admin/AdminMarketingSection'
+import { slugify } from '../services/seoManager'
 import {
   createWhatsAppLink,
   buildPaymentReminderMessage,
@@ -27,13 +32,14 @@ import {
   formatCep as formatCompanyCep,
   isValidCnpj,
   isValidEmail,
-  isValidUrl
+  isValidUrl,
+  getCompanyPublicName
 } from '../services/companyService'
 
 export default function AdminDashboard() {
   const {
     showAdminDashboard, setShowAdminDashboard,
-    products, orders, logoutAdmin,
+    products, orders, customers = [], logoutAdmin,
     addProduct, updateProduct, deleteProduct,
     updateOrderStatus, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
@@ -50,7 +56,20 @@ export default function AdminDashboard() {
     }
   })
 
+  const [productViewMode, setProductViewMode] = useState('list') // 'list' | 'add'
+
   const setTab = useCallback((newTab) => {
+    if (newTab === 'add') {
+      setTabState('products')
+      setProductViewMode('add')
+      try {
+        localStorage.setItem('infodesk_admin_active_tab', 'products')
+      } catch {}
+      return
+    }
+    if (newTab === 'products') {
+      setProductViewMode('list')
+    }
     setTabState(newTab)
     try {
       localStorage.setItem('infodesk_admin_active_tab', newTab)
@@ -89,6 +108,16 @@ export default function AdminDashboard() {
     description: '',
     images: [''],
     specs: [{ label: '', value: '' }],
+    slug: '',
+    seo_title: '',
+    seo_description: '',
+    image_alt: '',
+    primary_keyword: '',
+    mpn: '',
+    google_category: '',
+    is_anchor: false,
+    weekly_offer: false,
+    merchant_include: true,
   })
 
   // Password change form state
@@ -505,6 +534,17 @@ export default function AdminDashboard() {
       description: newProduct.description.trim(),
       images: newProduct.images.filter(img => img.trim().length > 0),
       specs: newProduct.specs.filter(s => s.label.trim() && s.value.trim()),
+      // Campos de SEO & Divulgação Orgânica
+      slug: newProduct.slug ? slugify(newProduct.slug) : slugify(newProduct.name),
+      seo_title: newProduct.seo_title?.trim() || newProduct.name.trim(),
+      seo_description: newProduct.seo_description?.trim() || newProduct.description?.trim() || '',
+      image_alt: newProduct.image_alt?.trim() || newProduct.name.trim(),
+      primary_keyword: newProduct.primary_keyword?.trim() || '',
+      mpn: newProduct.mpn?.trim() || '',
+      google_category: newProduct.google_category?.trim() || '',
+      is_anchor: Boolean(newProduct.is_anchor),
+      weekly_offer: Boolean(newProduct.weekly_offer),
+      merchant_include: newProduct.merchant_include !== false,
     })
 
     setNewProduct({
@@ -522,7 +562,18 @@ export default function AdminDashboard() {
       description: '',
       images: [''],
       specs: [{ label: '', value: '' }],
+      slug: '',
+      seo_title: '',
+      seo_description: '',
+      image_alt: '',
+      primary_keyword: '',
+      mpn: '',
+      google_category: '',
+      is_anchor: false,
+      weekly_offer: false,
+      merchant_include: true,
     })
+    setProductViewMode('list')
     setTab('products')
   }
 
@@ -530,6 +581,16 @@ export default function AdminDashboard() {
   const handleStartEdit = (product) => {
     setEditingProduct({
       ...product,
+      slug: product.slug || slugify(product.name),
+      seo_title: product.seo_title || product.name,
+      seo_description: product.seo_description || product.description || '',
+      image_alt: product.image_alt || product.name,
+      primary_keyword: product.primary_keyword || '',
+      mpn: product.mpn || '',
+      google_category: product.google_category || '',
+      is_anchor: Boolean(product.is_anchor),
+      weekly_offer: Boolean(product.weekly_offer),
+      merchant_include: product.merchant_include !== false,
       images: product.images?.length ? [...product.images] : [''],
       specs: product.specs?.length ? product.specs.map(s => ({ ...s })) : [{ label: '', value: '' }],
     })
@@ -560,6 +621,17 @@ export default function AdminDashboard() {
       description: editingProduct.description?.trim() || '',
       images: editingProduct.images.filter(img => img.trim().length > 0),
       specs: editingProduct.specs.filter(s => s.label.trim() && s.value.trim()),
+      // Campos de SEO & Divulgação Orgânica
+      slug: editingProduct.slug ? slugify(editingProduct.slug) : slugify(editingProduct.name),
+      seo_title: editingProduct.seo_title?.trim() || editingProduct.name.trim(),
+      seo_description: editingProduct.seo_description?.trim() || editingProduct.description?.trim() || '',
+      image_alt: editingProduct.image_alt?.trim() || editingProduct.name.trim(),
+      primary_keyword: editingProduct.primary_keyword?.trim() || '',
+      mpn: editingProduct.mpn?.trim() || '',
+      google_category: editingProduct.google_category?.trim() || '',
+      is_anchor: Boolean(editingProduct.is_anchor),
+      weekly_offer: Boolean(editingProduct.weekly_offer),
+      merchant_include: editingProduct.merchant_include !== false,
     })
 
     showToast(`Produto "${editingProduct.name}" atualizado com sucesso! ✅`)
@@ -603,6 +675,437 @@ export default function AdminDashboard() {
            p.category.toLowerCase().includes(q) ||
            (p.ean && p.ean.includes(q))
   })
+
+  // Formulário inteligente e reutilizável de cadastro de novo produto
+  const renderAddProductForm = () => (
+    <div className="adm-editor-form" style={{ marginTop: 'var(--space-2)' }}>
+      <div className="adm-editor-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h3>Cadastrar Novo Produto</h3>
+          <p>Preencha os dados completos para disponibilizar o item na loja.</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => setProductViewMode('list')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--dark-600)' }}
+        >
+          <ArrowLeft size={16} /> Voltar para Lista de Produtos
+        </button>
+      </div>
+
+      <div className="adm-editor-grid">
+        {/* Section 1: Basic Info */}
+        <div className="adm-editor-section">
+          <h4 className="adm-section-title"><Package size={16} /> Informações Básicas</h4>
+          <div className="ck-form-grid">
+            <div className="ck-field ck-field-full">
+              <label>Nome do Produto *</label>
+              <input
+                className="input-field"
+                value={newProduct.name}
+                onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                placeholder="Ex: Monitor Gamer 27 165Hz IPS"
+              />
+            </div>
+            <div className="ck-field">
+              <label>Marca / Fabricante *</label>
+              <input
+                className="input-field"
+                list="brand-suggestions-list"
+                value={newProduct.brand}
+                onChange={e => setNewProduct({ ...newProduct, brand: e.target.value })}
+                placeholder="Selecione ou digite a marca..."
+                autoComplete="off"
+              />
+            </div>
+            <div className="ck-field">
+              <label>Categoria / Departamento *</label>
+              <select
+                className="input-field"
+                value={newProduct.category}
+                onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
+              >
+                <option>Eletrônicos & Tecnologia</option>
+                <option>Informática & Periféricos</option>
+                <option>Escritório & Suprimentos</option>
+                <option>Casa & Utilidades</option>
+                <option>Ferramentas & Acessórios</option>
+                <option>Hardware</option>
+                <option>Periféricos</option>
+                <option>Monitores</option>
+                <option>Notebooks</option>
+                <option>Redes</option>
+                <option>Acessórios</option>
+                <option>Outros</option>
+              </select>
+            </div>
+            <div className="ck-field">
+              <label>Código EAN-13 / Barras</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  className="input-field"
+                  value={newProduct.ean}
+                  onChange={e => setNewProduct({ ...newProduct, ean: e.target.value })}
+                  placeholder="7891234567890"
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => {
+                    const autoEan = generateValidEan13('789')
+                    setNewProduct({ ...newProduct, ean: autoEan })
+                    showToast(`Código EAN-13 gerado: ${autoEan} 🎲`)
+                  }}
+                  title="Gerar código de barras EAN-13 válido"
+                >
+                  <Sparkles size={14} /> Gerar
+                </button>
+              </div>
+            </div>
+            <div className="ck-field">
+              <label>Quantidade em Estoque *</label>
+              <input
+                className="input-field"
+                type="number"
+                min="0"
+                value={newProduct.stock}
+                onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+            <div className="ck-field ck-field-full">
+              <label className="adm-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={newProduct.featured}
+                  onChange={e => setNewProduct({ ...newProduct, featured: e.target.checked })}
+                />
+                <span>⭐ Destacar este produto na vitrine principal da loja</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Pricing */}
+        <div className="adm-editor-section">
+          <h4 className="adm-section-title"><DollarSign size={16} /> Precificação & Lucratividade</h4>
+          <div className="ck-form-grid">
+            <div className="ck-field">
+              <label>💰 Preço de Custo (R$) *</label>
+              <input
+                className="input-field"
+                type="number"
+                step="0.01"
+                value={newProduct.costPrice}
+                onChange={e => handleNewCostChange(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="ck-field">
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Alíquota / Imposto (%) *</span>
+                <span className="badge badge-lime" style={{ fontSize: 10 }}>Padrão Global: {globalTaxRate}%</span>
+              </label>
+              <input
+                className="input-field"
+                type="number"
+                step="0.1"
+                value={newProduct.taxRate}
+                onChange={e => handleNewTaxChange(e.target.value)}
+                required
+              />
+            </div>
+            <div className="ck-field">
+              <label>📈 Margem de Lucro Desejada (%)</label>
+              <input
+                className="input-field"
+                type="number"
+                step="0.1"
+                value={newProduct.marginRate}
+                onChange={e => handleNewMarginChange(e.target.value)}
+              />
+            </div>
+            <div className="ck-field">
+              <label>🏷️ Preço de Venda Final (R$) *</label>
+              <input
+                className="input-field"
+                type="number"
+                step="0.01"
+                value={newProduct.price}
+                onChange={e => setNewProduct({ ...newProduct, price: e.target.value })}
+                placeholder="Calculado automaticamente"
+              />
+            </div>
+            <div className="ck-field">
+              <label>Preço "De" Riscado (R$)</label>
+              <input
+                className="input-field"
+                type="number"
+                step="0.01"
+                value={newProduct.originalPrice}
+                onChange={e => setNewProduct({ ...newProduct, originalPrice: e.target.value })}
+                placeholder="Para simular promoção"
+              />
+            </div>
+            <div className="ck-field">
+              <label>Sugestão Calculada:</label>
+              <div className="adm-auto-price">
+                R$ {calcSellPrice(newProduct.costPrice, newProduct.taxRate, newProduct.marginRate).toFixed(2).replace('.', ',')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Description */}
+        <div className="adm-editor-section">
+          <h4 className="adm-section-title"><Layers size={16} /> Descrição do Produto</h4>
+          <div className="ck-field">
+            <textarea
+              className="input-field"
+              rows={4}
+              value={newProduct.description}
+              onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
+              placeholder="Descreva as características técnicas, diferenciais, compatibilidade e garantia..."
+              style={{ resize: 'vertical' }}
+            />
+          </div>
+        </div>
+
+        {/* Section 4: Images */}
+        <div className="adm-editor-section">
+          <div className="adm-section-header-flex">
+            <h4 className="adm-section-title"><ImageIcon size={16} /> Galeria de Fotos (URLs)</h4>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setNewProduct({ ...newProduct, images: [...newProduct.images, ''] })}
+            >
+              <Plus size={14} /> Adicionar Foto
+            </button>
+          </div>
+
+          <div className="adm-images-list">
+            {newProduct.images.map((img, idx) => (
+              <div key={idx} className="adm-image-row">
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="https://exemplo.com/foto.jpg"
+                  value={img}
+                  onChange={e => {
+                    const updated = [...newProduct.images]
+                    updated[idx] = e.target.value
+                    setNewProduct({ ...newProduct, images: updated })
+                  }}
+                />
+                {img && (
+                  <img src={img} alt="Preview" className="adm-img-preview" />
+                )}
+                {newProduct.images.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--red)' }}
+                    onClick={() => {
+                      const updated = newProduct.images.filter((_, i) => i !== idx)
+                      setNewProduct({ ...newProduct, images: updated })
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Section 5: Specs */}
+        <div className="adm-editor-section">
+          <div className="adm-section-header-flex">
+            <h4 className="adm-section-title"><Sliders size={16} /> Especificações Técnicas (Ficha)</h4>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setNewProduct({ ...newProduct, specs: [...newProduct.specs, { label: '', value: '' }] })}
+            >
+              <Plus size={14} /> Adicionar Item
+            </button>
+          </div>
+
+          <div className="adm-specs-list">
+            {newProduct.specs.map((spec, idx) => (
+              <div key={idx} className="adm-spec-edit-row">
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Ex: Conectividade, Capacidade, Resolução..."
+                  value={spec.label}
+                  onChange={e => {
+                    const updated = [...newProduct.specs]
+                    updated[idx].label = e.target.value
+                    setNewProduct({ ...newProduct, specs: updated })
+                  }}
+                />
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Ex: USB-C, 1TB NVMe, 4K UHD..."
+                  value={spec.value}
+                  onChange={e => {
+                    const updated = [...newProduct.specs]
+                    updated[idx].value = e.target.value
+                    setNewProduct({ ...newProduct, specs: updated })
+                  }}
+                />
+                {newProduct.specs.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--red)' }}
+                    onClick={() => {
+                      const updated = newProduct.specs.filter((_, i) => i !== idx)
+                      setNewProduct({ ...newProduct, specs: updated })
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Section 6: SEO & Google Merchant Center */}
+        <div className="adm-editor-section" style={{ gridColumn: '1 / -1', background: 'var(--dark-50)', border: '1px solid var(--dark-200)', borderRadius: 12, padding: 16 }}>
+          <h4 className="adm-section-title"><Globe size={16} /> SEO & Divulgação no Google (Shopping / Merchant)</h4>
+          <div className="adm-form-grid" style={{ marginTop: 12 }}>
+            <div className="ck-field adm-col-6">
+              <label>Slug da URL (URL Amigável):</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex: teclado-gamer-rgb-infodesk"
+                value={newProduct.slug || ''}
+                onChange={e => setNewProduct({ ...newProduct, slug: slugify(e.target.value) })}
+              />
+              <small style={{ color: 'var(--dark-400)', fontSize: 11 }}>Deixe em branco para gerar automaticamente pelo nome</small>
+            </div>
+
+            <div className="ck-field adm-col-6">
+              <label>Palavra-Chave Principal:</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex: teclado gamer mecânico"
+                value={newProduct.primary_keyword || ''}
+                onChange={e => setNewProduct({ ...newProduct, primary_keyword: e.target.value })}
+              />
+            </div>
+
+            <div className="ck-field adm-col-6">
+              <label>Título SEO (&lt;title&gt;):</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Título otimizado para o Google"
+                value={newProduct.seo_title || ''}
+                onChange={e => setNewProduct({ ...newProduct, seo_title: e.target.value })}
+              />
+            </div>
+
+            <div className="ck-field adm-col-6">
+              <label>Texto Alternativo da Foto (Alt Text):</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Descrição da foto para Google Imagens e Acessibilidade"
+                value={newProduct.image_alt || ''}
+                onChange={e => setNewProduct({ ...newProduct, image_alt: e.target.value })}
+              />
+            </div>
+
+            <div className="ck-field adm-col-6">
+              <label>Part Number / MPN do Fabricante:</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex: KB-RGB-01"
+                value={newProduct.mpn || ''}
+                onChange={e => setNewProduct({ ...newProduct, mpn: e.target.value })}
+              />
+            </div>
+
+            <div className="ck-field adm-col-6">
+              <label>Categoria do Google Shopping:</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ex: Eletrônicos > Computadores > Periféricos"
+                value={newProduct.google_category || ''}
+                onChange={e => setNewProduct({ ...newProduct, google_category: e.target.value })}
+              />
+            </div>
+
+            <div className="ck-field adm-col-12">
+              <label>Meta Description SEO:</label>
+              <textarea
+                className="input-field"
+                rows={2}
+                placeholder="Resumo que aparecerá nos resultados de busca do Google (140-160 caracteres)"
+                value={newProduct.seo_description || ''}
+                onChange={e => setNewProduct({ ...newProduct, seo_description: e.target.value })}
+                maxLength={160}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 8 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={newProduct.is_anchor}
+                  onChange={e => setNewProduct({ ...newProduct, is_anchor: e.target.checked })}
+                  style={{ width: 16, height: 16, accentColor: 'var(--amber)' }}
+                />
+                ⭐ Produto-Âncora (Destaque SEO)
+              </label>
+
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={newProduct.weekly_offer}
+                  onChange={e => setNewProduct({ ...newProduct, weekly_offer: e.target.checked })}
+                  style={{ width: 16, height: 16, accentColor: 'var(--red)' }}
+                />
+                🔥 Oferta da Semana
+              </label>
+
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={newProduct.merchant_include}
+                  onChange={e => setNewProduct({ ...newProduct, merchant_include: e.target.checked })}
+                  style={{ width: 16, height: 16, accentColor: '#15803d' }}
+                />
+                🛒 Incluir no Google Merchant Center
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="adm-editor-actions">
+        <button
+          type="button"
+          className="btn btn-primary btn-lg"
+          onClick={handleAddProduct}
+          disabled={!newProduct.name || !newProduct.costPrice}
+        >
+          <Plus size={18} /> Cadastrar Produto no Catálogo
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="overlay">
@@ -667,9 +1170,11 @@ export default function AdminDashboard() {
             { id: 'overview', icon: <BarChart3 size={16} />, label: 'Visão Geral' },
             { id: 'products', icon: <Package size={16} />, label: `Produtos (${products.length})` },
             { id: 'orders', icon: <ShoppingCart size={16} />, label: `Pedidos (${orders.length})` },
-            { id: 'add', icon: <Plus size={16} />, label: 'Cadastrar Produto' },
+            { id: 'customers', icon: <Users size={16} />, label: `Clientes (${customers.length})` },
+            { id: 'marketing', icon: <Globe size={16} />, label: 'SEO e Divulgação' },
             { id: 'company', icon: <Building2 size={16} />, label: 'Dados da Empresa' },
             { id: 'shipping', icon: <Truck size={16} />, label: 'Frete & Entregas' },
+            { id: 'payments', icon: <CreditCard size={16} />, label: 'Pagamentos (MP)' },
             { id: 'security', icon: <KeyRound size={16} />, label: 'Segurança & Senha' },
           ].map(t => (
             <button key={t.id} className={`adm-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
@@ -785,31 +1290,84 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Products List */}
-          {tab === 'products' && (
+          {/* Clientes */}
+          {tab === 'customers' && (
+            <AdminCustomersSection />
+          )}
+
+          {/* SEO e Divulgação Multiloja */}
+          {tab === 'marketing' && (
+            <AdminMarketingSection />
+          )}
+
+          {/* Products Management (Catálogo & Cadastro Inteligente) */}
+          {(tab === 'products' || tab === 'add') && (
             <div className="adm-products">
-              {/* Product Search & Quick Actions */}
-              <div className="adm-products-bar">
-                <div className="adm-search-input-wrap">
-                  <Search size={16} className="adm-search-icon" />
-                  <input
-                    type="text"
-                    className="input-field"
-                    placeholder="Buscar por nome, marca, categoria ou EAN..."
-                    value={productSearch}
-                    onChange={e => setProductSearch(e.target.value)}
-                  />
+              {/* Header inteligente de alternância interna */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                marginBottom: 'var(--space-4)',
+                borderBottom: '1px solid var(--dark-200)',
+                paddingBottom: '12px'
+              }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${productViewMode === 'list' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setProductViewMode('list')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Package size={16} /> Catálogo de Produtos ({products.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${productViewMode === 'add' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setProductViewMode('add')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Plus size={16} /> Cadastrar Produto
+                  </button>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setTab('add')}>
-                  <Plus size={16} /> Novo Produto
-                </button>
+
+                {productViewMode === 'add' && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setProductViewMode('list')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--dark-600)' }}
+                  >
+                    <ArrowLeft size={16} /> Voltar para Lista
+                  </button>
+                )}
               </div>
 
-              <div className="adm-table-wrap">
-                <table className="adm-table">
-                  <thead>
-                    <tr>
-                      <th>Produto</th>
+              {productViewMode === 'add' ? (
+                renderAddProductForm()
+              ) : (
+                <>
+                  {/* Product Search & Quick Actions */}
+                  <div className="adm-products-bar">
+                    <div className="adm-search-input-wrap">
+                      <Search size={16} className="adm-search-icon" />
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Buscar por nome, marca, categoria ou EAN..."
+                        value={productSearch}
+                        onChange={e => setProductSearch(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="adm-table-wrap">
+                    <table className="adm-table">
+                      <thead>
+                        <tr>
+                          <th>Produto</th>
                       <th>Marca / Cat.</th>
                       <th>Custo</th>
                       <th>Preço de Venda</th>
@@ -906,8 +1464,10 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </>
           )}
+        </div>
+      )}
 
           {/* Orders */}
           {tab === 'orders' && (
@@ -1011,14 +1571,15 @@ export default function AdminDashboard() {
                                   className="btn btn-sm"
                                   onClick={() => {
                                     let msg = ''
+                                    const publicStoreName = getCompanyPublicName(companyData)
                                     if (o.status === 'Pendente') {
-                                      msg = buildPaymentReminderMessage(o)
+                                      msg = buildPaymentReminderMessage(o, companyData)
                                     } else if (o.status === 'Enviado') {
-                                      msg = buildShippingNotificationMessage(o, o.trackingCode)
+                                      msg = buildShippingNotificationMessage(o, companyData)
                                     } else if (o.status === 'Entregue') {
-                                      msg = buildDeliveredNotificationMessage(o)
+                                      msg = buildDeliveredNotificationMessage(o, companyData)
                                     } else {
-                                      msg = `Olá ${o.cliente?.nome || ''}! Aqui é da *Infodesk Store* referente ao seu Pedido *#${o.id}*. Status atual: *${o.status}*. Se tiver qualquer dúvida, estamos à disposição!`
+                                      msg = `Olá ${o.cliente?.nome || ''}! Aqui é da *${publicStoreName}* referente ao seu Pedido *#${o.id}*. Status atual: *${o.status}*. Se tiver qualquer dúvida, estamos à disposição!`
                                     }
                                     const link = createWhatsAppLink(o.cliente.telefone, msg)
                                     window.open(link, '_blank', 'noopener,noreferrer')
@@ -1053,309 +1614,8 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Add Product */}
-          {tab === 'add' && (
-            <div className="adm-editor-form">
-              <div className="adm-editor-header">
-                <h3>Cadastrar Novo Produto</h3>
-                <p>Preencha os dados completos para disponibilizar o item na loja.</p>
-              </div>
-
-              <div className="adm-editor-grid">
-                {/* Section 1: Basic Info */}
-                <div className="adm-editor-section">
-                  <h4 className="adm-section-title"><Package size={16} /> Informações Básicas</h4>
-                  <div className="ck-form-grid">
-                    <div className="ck-field ck-field-full">
-                      <label>Nome do Produto *</label>
-                      <input
-                        className="input-field"
-                        value={newProduct.name}
-                        onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
-                        placeholder="Ex: Monitor Gamer 27 165Hz IPS"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Marca / Fabricante *</label>
-                      <input
-                        className="input-field"
-                        list="brand-suggestions-list"
-                        value={newProduct.brand}
-                        onChange={e => setNewProduct({ ...newProduct, brand: e.target.value })}
-                        placeholder="Selecione ou digite a marca..."
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Categoria / Departamento *</label>
-                      <select
-                        className="input-field"
-                        value={newProduct.category}
-                        onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
-                      >
-                        <option>Eletrônicos & Tecnologia</option>
-                        <option>Informática & Periféricos</option>
-                        <option>Escritório & Suprimentos</option>
-                        <option>Casa & Utilidades</option>
-                        <option>Ferramentas & Acessórios</option>
-                        <option>Hardware</option>
-                        <option>Periféricos</option>
-                        <option>Monitores</option>
-                        <option>Notebooks</option>
-                        <option>Redes</option>
-                        <option>Acessórios</option>
-                        <option>Outros</option>
-                      </select>
-                    </div>
-                    <div className="ck-field">
-                      <label>Código EAN-13 / Barras</label>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <input
-                          className="input-field"
-                          value={newProduct.ean}
-                          onChange={e => setNewProduct({ ...newProduct, ean: e.target.value })}
-                          placeholder="7891234567890"
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => {
-                            const autoEan = generateValidEan13('789')
-                            setNewProduct({ ...newProduct, ean: autoEan })
-                            showToast(`Código EAN-13 gerado: ${autoEan} 🎲`)
-                          }}
-                          title="Gerar código de barras EAN-13 válido"
-                        >
-                          <Sparkles size={14} /> Gerar
-                        </button>
-                      </div>
-                    </div>
-                    <div className="ck-field">
-                      <label>Quantidade em Estoque *</label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        min="0"
-                        value={newProduct.stock}
-                        onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="ck-field ck-field-full">
-                      <label className="adm-checkbox-label">
-                        <input
-                          type="checkbox"
-                          checked={newProduct.featured}
-                          onChange={e => setNewProduct({ ...newProduct, featured: e.target.checked })}
-                        />
-                        <span>⭐ Destacar este produto na vitrine principal da loja</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 2: Pricing */}
-                <div className="adm-editor-section">
-                  <h4 className="adm-section-title"><DollarSign size={16} /> Precificação & Lucratividade</h4>
-                  <div className="ck-form-grid">
-                    <div className="ck-field">
-                      <label>💰 Preço de Custo (R$) *</label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        step="0.01"
-                        value={newProduct.costPrice}
-                        onChange={e => handleNewCostChange(e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>Alíquota / Imposto (%) *</span>
-                        <span className="badge badge-lime" style={{ fontSize: 10 }}>Padrão Global: {globalTaxRate}%</span>
-                      </label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        step="0.1"
-                        value={newProduct.taxRate}
-                        onChange={e => handleNewTaxChange(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>📈 Margem de Lucro Desejada (%)</label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        step="0.1"
-                        value={newProduct.marginRate}
-                        onChange={e => handleNewMarginChange(e.target.value)}
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>🏷️ Preço de Venda Final (R$) *</label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        step="0.01"
-                        value={newProduct.price}
-                        onChange={e => setNewProduct({ ...newProduct, price: e.target.value })}
-                        placeholder="Calculado automaticamente"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Preço "De" Riscado (R$)</label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        step="0.01"
-                        value={newProduct.originalPrice}
-                        onChange={e => setNewProduct({ ...newProduct, originalPrice: e.target.value })}
-                        placeholder="Para simular promoção"
-                      />
-                    </div>
-                    <div className="ck-field">
-                      <label>Sugestão Calculada:</label>
-                      <div className="adm-auto-price">
-                        R$ {calcSellPrice(newProduct.costPrice, newProduct.taxRate, newProduct.marginRate).toFixed(2).replace('.', ',')}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: Description */}
-                <div className="adm-editor-section">
-                  <h4 className="adm-section-title"><Layers size={16} /> Descrição do Produto</h4>
-                  <div className="ck-field">
-                    <textarea
-                      className="input-field"
-                      rows={4}
-                      value={newProduct.description}
-                      onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
-                      placeholder="Descreva as características técnicas, diferenciais, compatibilidade e garantia..."
-                      style={{ resize: 'vertical' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Section 4: Images */}
-                <div className="adm-editor-section">
-                  <div className="adm-section-header-flex">
-                    <h4 className="adm-section-title"><ImageIcon size={16} /> Galeria de Fotos (URLs)</h4>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setNewProduct({ ...newProduct, images: [...newProduct.images, ''] })}
-                    >
-                      <Plus size={14} /> Adicionar Foto
-                    </button>
-                  </div>
-
-                  <div className="adm-images-list">
-                    {newProduct.images.map((img, idx) => (
-                      <div key={idx} className="adm-image-row">
-                        <input
-                          type="text"
-                          className="input-field"
-                          placeholder="https://exemplo.com/foto.jpg"
-                          value={img}
-                          onChange={e => {
-                            const updated = [...newProduct.images]
-                            updated[idx] = e.target.value
-                            setNewProduct({ ...newProduct, images: updated })
-                          }}
-                        />
-                        {img && (
-                          <img src={img} alt="Preview" className="adm-img-preview" />
-                        )}
-                        {newProduct.images.length > 1 && (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            style={{ color: 'var(--red)' }}
-                            onClick={() => {
-                              const updated = newProduct.images.filter((_, i) => i !== idx)
-                              setNewProduct({ ...newProduct, images: updated })
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Section 5: Specs */}
-                <div className="adm-editor-section">
-                  <div className="adm-section-header-flex">
-                    <h4 className="adm-section-title"><Sliders size={16} /> Especificações Técnicas (Ficha)</h4>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setNewProduct({ ...newProduct, specs: [...newProduct.specs, { label: '', value: '' }] })}
-                    >
-                      <Plus size={14} /> Adicionar Item
-                    </button>
-                  </div>
-
-                  <div className="adm-specs-list">
-                    {newProduct.specs.map((spec, idx) => (
-                      <div key={idx} className="adm-spec-edit-row">
-                        <input
-                          type="text"
-                          className="input-field"
-                          placeholder="Ex: Conectividade, Capacidade, Resolução..."
-                          value={spec.label}
-                          onChange={e => {
-                            const updated = [...newProduct.specs]
-                            updated[idx].label = e.target.value
-                            setNewProduct({ ...newProduct, specs: updated })
-                          }}
-                        />
-                        <input
-                          type="text"
-                          className="input-field"
-                          placeholder="Ex: USB-C, 1TB NVMe, 4K UHD..."
-                          value={spec.value}
-                          onChange={e => {
-                            const updated = [...newProduct.specs]
-                            updated[idx].value = e.target.value
-                            setNewProduct({ ...newProduct, specs: updated })
-                          }}
-                        />
-                        {newProduct.specs.length > 1 && (
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            style={{ color: 'var(--red)' }}
-                            onClick={() => {
-                              const updated = newProduct.specs.filter((_, i) => i !== idx)
-                              setNewProduct({ ...newProduct, specs: updated })
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="adm-editor-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary btn-lg"
-                  onClick={handleAddProduct}
-                  disabled={!newProduct.name || !newProduct.costPrice}
-                >
-                  <Plus size={18} /> Cadastrar Produto no Catálogo
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Add Product (Retrocompatibilidade de atalho) */}
+          {tab === 'add' && renderAddProductForm()}
 
           {/* Shipping & Delivery Tab (Correios Multiempresa) */}
           {tab === 'shipping' && (
@@ -1995,6 +2255,11 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Mercado Pago Payments Configuration & History */}
+          {tab === 'payments' && (
+            <AdminPaymentsSection />
+          )}
+
           {/* Security & Password Tab */}
           {tab === 'security' && (
             <div className="adm-security-tab">
@@ -2409,6 +2674,123 @@ export default function AdminDashboard() {
                         )}
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* 6. SEO & Divulgação no Google (Shopping / Merchant) */}
+                <div className="adm-editor-section" style={{ background: 'var(--dark-50)', border: '1px solid var(--dark-200)', borderRadius: 12, padding: 16 }}>
+                  <h4 className="adm-section-title"><Globe size={16} /> SEO & Divulgação no Google (Shopping / Merchant)</h4>
+                  <div className="adm-form-grid" style={{ marginTop: 12 }}>
+                    <div className="ck-field adm-col-6">
+                      <label>Slug da URL (URL Amigável):</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Ex: teclado-gamer-rgb-infodesk"
+                        value={editingProduct.slug || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, slug: slugify(e.target.value) })}
+                      />
+                      <small style={{ color: 'var(--dark-400)', fontSize: 11 }}>Identificador único para a URL pública do produto</small>
+                    </div>
+
+                    <div className="ck-field adm-col-6">
+                      <label>Palavra-Chave Principal:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Ex: teclado gamer mecânico"
+                        value={editingProduct.primary_keyword || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, primary_keyword: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="ck-field adm-col-6">
+                      <label>Título SEO (&lt;title&gt;):</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Título otimizado para o Google"
+                        value={editingProduct.seo_title || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, seo_title: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="ck-field adm-col-6">
+                      <label>Texto Alternativo da Foto (Alt Text):</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Descrição da foto para Google Imagens e Acessibilidade"
+                        value={editingProduct.image_alt || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, image_alt: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="ck-field adm-col-6">
+                      <label>Part Number / MPN do Fabricante:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Ex: KB-RGB-01"
+                        value={editingProduct.mpn || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, mpn: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="ck-field adm-col-6">
+                      <label>Categoria do Google Shopping:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Ex: Eletrônicos > Computadores > Periféricos"
+                        value={editingProduct.google_category || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, google_category: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="ck-field adm-col-12">
+                      <label>Meta Description SEO:</label>
+                      <textarea
+                        className="input-field"
+                        rows={2}
+                        placeholder="Resumo que aparecerá nos resultados de busca do Google (140-160 caracteres)"
+                        value={editingProduct.seo_description || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, seo_description: e.target.value })}
+                        maxLength={160}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 8 }}>
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={editingProduct.is_anchor || false}
+                          onChange={e => setEditingProduct({ ...editingProduct, is_anchor: e.target.checked })}
+                          style={{ width: 16, height: 16, accentColor: 'var(--amber)' }}
+                        />
+                        ⭐ Produto-Âncora (Destaque SEO)
+                      </label>
+
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={editingProduct.weekly_offer || false}
+                          onChange={e => setEditingProduct({ ...editingProduct, weekly_offer: e.target.checked })}
+                          style={{ width: 16, height: 16, accentColor: 'var(--red)' }}
+                        />
+                        🔥 Oferta da Semana
+                      </label>
+
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={editingProduct.merchant_include !== false}
+                          onChange={e => setEditingProduct({ ...editingProduct, merchant_include: e.target.checked })}
+                          style={{ width: 16, height: 16, accentColor: 'var(--lime)' }}
+                        />
+                        📦 Incluir no Feed do Google Shopping
+                      </label>
+                    </div>
                   </div>
                 </div>
 

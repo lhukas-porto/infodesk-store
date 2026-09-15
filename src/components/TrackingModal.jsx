@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { createWhatsAppLink } from '../services/whatsappService'
+import { getCompanyPublicName } from '../services/companyService'
 
 export default function TrackingModal() {
   const {
@@ -12,8 +13,11 @@ export default function TrackingModal() {
     setShowTrackingModal,
     trackingCodeToView,
     setTrackingCodeToView,
-    showToast
+    showToast,
+    companyData
   } = useStore()
+
+  const publicName = getCompanyPublicName(companyData)
 
   const [inputCode, setInputCode] = useState(trackingCodeToView || '')
   const [isLoading, setIsLoading] = useState(false)
@@ -83,7 +87,7 @@ export default function TrackingModal() {
 
   const handleShareWhatsApp = () => {
     if (!trackingData) return
-    const msg = `📦 *Acompanhe meu pedido da Infodesk Store!*\nCódigo de Rastreamento: *${trackingData.codigo}*\nStatus Atual: *${trackingData.descricaoStatus}*\nÚltima Atualização: ${trackingData.ultimaAtualizacao}`
+    const msg = `📦 *Acompanhe meu pedido da ${publicName}!*\nCódigo de Rastreamento: *${trackingData.codigo}*\nStatus Atual: *${trackingData.descricaoStatus}*\nÚltima Atualização: ${trackingData.ultimaAtualizacao}`
     window.open(createWhatsAppLink('', msg), '_blank')
   }
 
@@ -126,7 +130,7 @@ export default function TrackingModal() {
             <div>
               <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--dark-900)' }}>Rastreamento de Encomendas</h3>
               <span style={{ fontSize: '12px', color: 'var(--dark-500)' }}>
-                Integração Oficial com o Contrato dos Correios da Infodesk Store
+                Integração Oficial com o Contrato dos Correios da {publicName}
               </span>
             </div>
           </div>

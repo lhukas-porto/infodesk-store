@@ -28,14 +28,19 @@ export function gerarBoleto(pedido) {
   const vencimento = new Date()
   vencimento.setDate(vencimento.getDate() + 3)
 
+  const company = getCompanyDataLocal()
+  const publicStoreName = getCompanyPublicName(company)
+  const fullAddress = getCompanyFullAddress(company)
+
   const boleto = {
     banco: 'Rede Bancária Nacional',
     codigoBanco: 'Boleto Registrado',
     linhaDigitavel: gerarLinhaDigitavel(),
     codigoBarras: gerarCodigoBarras(),
-    beneficiario: 'INFODESK INFORMÁTICA — Lucas Porto da Fonseca',
-    cnpj: '15.266.716/0001-02',
-    enderecoBeneficiario: 'CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília/DF - CEP 70.673-631',
+    beneficiario: company?.razaoSocial ? `${company.razaoSocial}${company.nomeFantasia ? ` (${company.nomeFantasia})` : ''}` : `${publicStoreName} — Lucas Porto da Fonseca`,
+    nomeLoja: publicStoreName.toUpperCase(),
+    cnpj: company?.cnpj || '15.266.716/0001-02',
+    enderecoBeneficiario: fullAddress,
     valor: pedido.total,
     valorFormatado: `R$ ${pedido.total.toFixed(2).replace('.', ',')}`,
     vencimento: vencimento.toLocaleDateString('pt-BR'),
@@ -62,7 +67,7 @@ export function gerarBoletoPDF(boleto) {
   doc.setTextColor(132, 204, 22)
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
-  doc.text('INFODESK STORE', 15, 18)
+  doc.text(boleto.nomeLoja || 'LOJA ONLINE', 15, 18)
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(10)
   doc.text('Boleto Bancário', 160, 18)

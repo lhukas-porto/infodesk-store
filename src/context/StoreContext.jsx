@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
-import initialProducts from '../data/initialProducts'
 import { calcCommercialSellPrice, calcCommercialOriginalPrice } from '../services/pricingService'
 import {
   fetchProductsFromDb,
   upsertProductToDb,
   deleteProductFromDb,
-  seedProductsToDb,
   fetchCustomersFromDb,
   upsertCustomerToDb,
+  updateCustomerInDb,
+  logCustomerAuditAction,
+  fetchCustomerAuditLogs,
   fetchOrdersFromDb,
   insertOrderToDb,
   updateOrderInDb,
@@ -16,6 +17,7 @@ import {
 } from '../services/supabaseService'
 import { isSupabaseConfigured } from '../services/supabaseClient'
 import { DEFAULT_COMPANY_DATA, getCompanyPublicName } from '../services/companyService'
+import { createAnonymizedCustomerPayload } from '../services/customerService'
 
 const StoreContext = createContext()
 
@@ -26,40 +28,25 @@ export function useStore() {
 }
 
 // Configuração padrão de credenciais de administrador (persistidas no localStorage)
+// IMPORTANTE: Altere estas credenciais no painel Admin > Configurações antes de publicar
 const DEFAULT_ADMIN_CONFIG = {
-  email: 'lucas@infodesk.net.br',
-  altEmail: 'admin@infodesk.net.br',
-  name: 'Lucas — Administrador',
-  password: 'infodesk@admin2026',
+  email: 'admin@minhaloja.com.br',
+  altEmail: '',
+  name: 'Administrador',
+  password: 'admin@2024',
   role: 'Super Admin',
   globalTaxRate: 10,
 }
 
-// Clientes pré-cadastrados / base local de clientes
-const DEFAULT_CUSTOMERS = [
-  {
-    id: 'cust_1',
-    nome: 'Lucas Silva',
-    email: 'lucas@infodesk.net.br',
-    cpf: '123.456.789-00',
-    telefone: '(61) 99999-8888',
-    password: '123',
-    cep: '70070-010',
-    endereco: 'Setor Comercial Sul, Quadra 01',
-    numero: '100',
-    complemento: 'Bloco A, Sala 204',
-    bairro: 'Asa Sul',
-    cidade: 'Brasília',
-    estado: 'DF',
-    createdAt: new Date().toISOString()
-  }
-]
+// Clientes pré-cadastrados / base local de clientes (iniciado do zero)
+const DEFAULT_CUSTOMERS = []
 
 export function StoreProvider({ children }) {
   // === Products ===
   const [products, setProducts] = useState(() => {
+    if (isSupabaseConfigured) return []
     const saved = localStorage.getItem('infodesk_products')
-    return saved ? JSON.parse(saved) : initialProducts
+    return saved ? JSON.parse(saved) : []
   })
 
   // === Cart ===
@@ -590,48 +577,24 @@ export function StoreProvider({ children }) {
 
     async function hydrateFromSupabase() {
       try {
-        // 1. Produtos
+        // 1. Produtos - O banco Supabase é a única fonte da verdade.
+        // Nenhuma inserção ou sincronização automática é executada.
         const dbProducts = await fetchProductsFromDb()
         if (!isMounted) return
 
         if (dbProducts !== null) {
-          if (dbProducts.length === 0) {
-            // Seed automático no Supabase se a tabela estiver vazia
-            const seeded = await seedProductsToDb(initialProducts)
-            if (isMounted && seeded && seeded.length > 0) {
-              setProducts(seeded)
-            }
-          } else {
-            // Mescla de segurança: preserva produtos locais pendentes (prod-xxx) para que nunca sumam no F5
-            setProducts(prev => {
-              const pendingLocal = (prev || []).filter(p => typeof p.id === 'string' && p.id.startsWith('prod-'))
-              if (pendingLocal.length > 0) {
-                // Sincroniza em segundo plano no Supabase
-                pendingLocal.forEach(p => {
-                  upsertProductToDb(p).then(saved => {
-                    if (saved && saved.id) {
-                      setProducts(curr => curr.map(item => item.id === p.id ? saved : item))
-                    }
-                  }).catch(() => {})
-                })
-                const existingEans = new Set(dbProducts.map(dp => dp.ean).filter(Boolean))
-                const toKeep = pendingLocal.filter(p => !p.ean || !existingEans.has(p.ean))
-                return [...toKeep, ...dbProducts]
-              }
-              return dbProducts
-            })
-          }
+          setProducts(dbProducts)
         }
 
         // 2. Clientes
         const dbCustomers = await fetchCustomersFromDb()
-        if (isMounted && dbCustomers && dbCustomers.length > 0) {
+        if (isMounted && dbCustomers !== null) {
           setCustomers(dbCustomers)
         }
 
         // 3. Pedidos
         const dbOrders = await fetchOrdersFromDb()
-        if (isMounted && dbOrders) {
+        if (isMounted && dbOrders !== null) {
           setOrders(dbOrders)
         }
 
@@ -797,8 +760,8 @@ export function StoreProvider({ children }) {
 
       const session = {
         user: {
-          name: adminConfig.name || 'Lucas — Administrador',
-          email: adminConfig.email || 'lucas@infodesk.net.br',
+          name: adminConfig.name || 'Administrador',
+          email: adminConfig.email || 'admin@minhaloja.com.br',
           role: adminConfig.role || 'Super Admin',
         },
         token: 'auth_' + Math.random().toString(36).substring(2) + Date.now().toString(36),
@@ -810,7 +773,7 @@ export function StoreProvider({ children }) {
       localStorage.setItem('infodesk_admin_session', JSON.stringify(session))
       setShowAdminLogin(false)
       setShowAdminDashboard(true)
-      showToast(`Bem-vindo, ${(adminConfig.name || 'Lucas').split(' ')[0]}! Acesso seguro liberado. 🛡️`)
+      showToast(`Bem-vindo, ${(adminConfig.name || 'Administrador').split(' ')[0]}! Acesso seguro liberado. 🛡️`)
       return { success: true }
     }
 
@@ -902,9 +865,142 @@ export function StoreProvider({ children }) {
       }))
       showToast(`Alíquota de ${rate}% aplicada a todos os produtos com sucesso! 📊✅`)
     } else {
-      showToast(`Alíquota padrão definida para ${rate}%.`)
+      showToast('Alíquota padrão definida para ' + rate + '%.')
     }
   }, [showToast])
+
+  // === Customer Administrative Actions (White-Label & LGPD) ===
+  const currentCompanyId = companyData?.id || 'default'
+  const adminRole = adminSession?.user?.role || adminConfig?.role || 'super_admin'
+
+  const updateAdminRole = useCallback((newRole) => {
+    setAdminSession(prev => {
+      if (!prev) return prev
+      const updated = {
+        ...prev,
+        user: { ...prev.user, role: newRole }
+      }
+      try {
+        localStorage.setItem('infodesk_admin_session', JSON.stringify(updated))
+      } catch {}
+      return updated
+    })
+    showToast(`Perfil de acesso alterado para: ${newRole} 🛡️`)
+  }, [showToast])
+
+  const updateAdminCustomer = useCallback(async (customerId, updates, actorInfo = {}) => {
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, ...updates } : c))
+
+    if (isSupabaseConfigured) {
+      await updateCustomerInDb(customerId, updates)
+    }
+
+    await logCustomerAuditAction({
+      company_id: currentCompanyId,
+      customer_id: customerId,
+      actor_name: actorInfo.name || adminSession?.user?.name || 'Administrador',
+      actor_email: actorInfo.email || adminSession?.user?.email || 'admin@infodesk.net.br',
+      actor_role: actorInfo.role || adminRole,
+      action: 'UPDATE_PROFILE',
+      details: { fields: Object.keys(updates) }
+    })
+
+    showToast('Dados cadastrais atualizados com sucesso! ✅')
+    return { success: true }
+  }, [adminSession, adminRole, showToast])
+
+  const toggleCustomerStatus = useCallback(async (customerId, newStatus, reason = '') => {
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, status: newStatus } : c))
+
+    if (isSupabaseConfigured) {
+      await updateCustomerInDb(customerId, { status: newStatus })
+    }
+
+    await logCustomerAuditAction({
+      company_id: currentCompanyId,
+      customer_id: customerId,
+      actor_name: adminSession?.user?.name || 'Administrador',
+      actor_email: adminSession?.user?.email || 'admin@infodesk.net.br',
+      actor_role: adminRole,
+      action: 'TOGGLE_STATUS',
+      details: { newStatus, reason }
+    })
+
+    showToast(`Status do cliente alterado para: ${newStatus}`)
+    return { success: true }
+  }, [adminSession, adminRole, showToast])
+
+  const saveCustomerNotes = useCallback(async (customerId, notes) => {
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, internal_notes: notes } : c))
+
+    if (isSupabaseConfigured) {
+      await updateCustomerInDb(customerId, { internal_notes: notes })
+    }
+
+    await logCustomerAuditAction({
+      company_id: currentCompanyId,
+      customer_id: customerId,
+      actor_name: adminSession?.user?.name || 'Administrador',
+      actor_email: adminSession?.user?.email || 'admin@infodesk.net.br',
+      actor_role: adminRole,
+      action: 'UPDATE_NOTES',
+      details: { notesLength: (notes || '').length }
+    })
+
+    showToast('Observações internas salvas! 📝')
+    return { success: true }
+  }, [adminSession, adminRole, showToast])
+
+  const anonymizeCustomer = useCallback(async (customerId, reason = 'Solicitação do titular (Art. 18 LGPD)') => {
+    const target = customers.find(c => c.id === customerId)
+    if (!target) return { success: false, error: 'Cliente não encontrado' }
+
+    const anonPayload = createAnonymizedCustomerPayload(target)
+    setCustomers(prev => prev.map(c => c.id === customerId ? anonPayload : c))
+
+    if (isSupabaseConfigured) {
+      await updateCustomerInDb(customerId, {
+        nome: anonPayload.nome,
+        email: anonPayload.email,
+        cpf: anonPayload.cpf,
+        telefone: anonPayload.telefone,
+        endereco: anonPayload.endereco,
+        numero: anonPayload.numero,
+        complemento: anonPayload.complemento,
+        bairro: anonPayload.bairro,
+        status: anonPayload.status,
+        internal_notes: anonPayload.internal_notes,
+        consent_marketing: false,
+        consent_whatsapp: false,
+        anonymized_at: anonPayload.anonymized_at
+      })
+    }
+
+    await logCustomerAuditAction({
+      company_id: currentCompanyId,
+      customer_id: customerId,
+      actor_name: adminSession?.user?.name || 'Administrador',
+      actor_email: adminSession?.user?.email || 'admin@infodesk.net.br',
+      actor_role: adminRole,
+      action: 'ANONYMIZE',
+      details: { reason, anonymizedAt: anonPayload.anonymized_at }
+    })
+
+    showToast('Dados do cliente anonimizados com sucesso conforme a LGPD. 🔒')
+    return { success: true, customer: anonPayload }
+  }, [customers, adminSession, adminRole, showToast])
+
+  const recordCustomerAudit = useCallback(async (action, customerId, details = {}) => {
+    return await logCustomerAuditAction({
+      company_id: currentCompanyId,
+      customer_id: customerId,
+      actor_name: adminSession?.user?.name || 'Administrador',
+      actor_email: adminSession?.user?.email || 'admin@infodesk.net.br',
+      actor_role: adminRole,
+      action,
+      details
+    })
+  }, [adminSession, adminRole])
 
   // === Cart Actions ===
   const addToCart = useCallback((product, qty = 1) => {
@@ -1110,6 +1206,16 @@ export function StoreProvider({ children }) {
     saveCustomerProfile,
     showCustomerAccount,
     setShowCustomerAccount,
+    // Gestão Administrativa de Clientes Multiempresa & LGPD
+    currentCompanyId,
+    adminRole,
+    updateAdminRole,
+    updateAdminCustomer,
+    toggleCustomerStatus,
+    saveCustomerNotes,
+    anonymizeCustomer,
+    recordCustomerAudit,
+    fetchCustomerAuditLogs,
     // Fase 3: CEP Global & Filtros Facetados
     globalCep, setGlobalCep,
     globalAddress, setGlobalAddress,
