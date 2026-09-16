@@ -131,28 +131,29 @@ export function getCompanyPublicName(company) {
 }
 
 /**
- * Monta o endereço textual completo para exibição
+ * Monta o endereço textual completo para exibição no rodapé e canais oficiais.
+ * Sequência solicitada: Endereço complemento e numero (sem vírgulas entre esses 3 campos),
+ * seguido por bairro, cidade - estado e CEP (separados por vírgula).
  */
 export function getCompanyFullAddress(company) {
-  if (!company) return 'CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília - DF · CEP 70.673-631'
+  if (!company) return 'CLSW 304 Bloco A Sala 108, Sudoeste, Brasília - DF, CEP 70673-631'
   const parts = []
   const end = company.endereco?.trim()
-  const num = company.numero?.trim()
   const comp = company.complemento?.trim()
+  const num = company.numero?.trim()
 
-  if (end) {
-    if (num) {
-      const numFormatted = /^\d+$/.test(num) ? `nº ${num}` : num
-      parts.push(`${end} ${numFormatted}`)
-    } else {
-      parts.push(end)
-    }
+  // 1. Sequência: Endereço complemento e numero (sem vírgulas entre esses campos)
+  const streetParts = []
+  if (end) streetParts.push(end)
+  if (comp && !end?.includes(comp)) streetParts.push(comp)
+  if (num && !end?.includes(num) && (!comp || !comp?.includes(num))) {
+    streetParts.push(num)
   }
 
-  if (comp && !end?.includes(comp) && !num?.includes(comp)) {
-    parts.push(comp)
-  }
+  const streetLine = streetParts.join(' ')
+  if (streetLine) parts.push(streetLine)
 
+  // 2. Bairro, cidade - estado e CEP (separados por vírgula)
   if (company.bairro?.trim()) parts.push(company.bairro.trim())
   if (company.cidade?.trim() && company.estado?.trim()) {
     parts.push(`${company.cidade.trim()} - ${company.estado.trim()}`)
@@ -161,7 +162,7 @@ export function getCompanyFullAddress(company) {
   }
   if (company.cep?.trim()) parts.push(`CEP ${formatCep(company.cep)}`)
 
-  return parts.join(', ') || 'CLSW 304 Bloco A Sala 108 - Sudoeste, Brasília - DF · CEP 70.673-631'
+  return parts.join(', ') || 'CLSW 304 Bloco A Sala 108, Sudoeste, Brasília - DF, CEP 70673-631'
 }
 
 /**
