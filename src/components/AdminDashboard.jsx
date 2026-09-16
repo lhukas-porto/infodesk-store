@@ -41,7 +41,7 @@ export default function AdminDashboard() {
     showAdminDashboard, setShowAdminDashboard,
     products, orders, customers = [], logoutAdmin,
     addProduct, updateProduct, deleteProduct, clearAllProducts,
-    updateOrderStatus, setShowScanner, showToast,
+    updateOrderStatus, deleteOrder, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
     globalTaxRate, updateGlobalTaxRate,
     openTrackingModal,
@@ -1510,8 +1510,12 @@ export default function AdminDashboard() {
                           <td>{new Date(o.date).toLocaleDateString('pt-BR')}</td>
                           <td>
                             <div>
-                              <strong>{o.cliente?.nome || 'N/A'}</strong>
-                              <span style={{ display: 'block', fontSize: '11px', color: 'var(--dark-400)' }}>{o.cliente?.cidade}/{o.cliente?.estado}</span>
+                              <strong>{o.cliente?.nome || o.customerName || 'Cliente'}</strong>
+                              {(o.cliente?.cidade || o.cliente?.estado) ? (
+                                <span style={{ display: 'block', fontSize: '11px', color: 'var(--dark-400)' }}>
+                                  {[o.cliente?.cidade, o.cliente?.estado].filter(Boolean).join(' / ')}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
                           <td><span className="badge badge-dark">{o.paymentMethod || 'N/A'}</span></td>
@@ -1625,6 +1629,31 @@ export default function AdminDashboard() {
                                   <span>WhatsApp</span>
                                 </button>
                               )}
+
+                              {/* Botão de Excluir Pedido */}
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => {
+                                  if (window.confirm(`Tem certeza que deseja excluir o pedido #${o.id}? Essa ação apagará o pedido definitivamente.`)) {
+                                    deleteOrder(o.id)
+                                  }
+                                }}
+                                title="Excluir este pedido"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '5px',
+                                  borderRadius: '6px',
+                                  color: 'var(--red, #ef4444)',
+                                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                                  background: 'rgba(239, 68, 68, 0.05)',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </div>
                           </td>
                         </tr>

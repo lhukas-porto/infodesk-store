@@ -13,6 +13,7 @@ import {
   fetchOrdersFromDb,
   insertOrderToDb,
   updateOrderInDb,
+  deleteOrderFromDb,
   fetchStoreSettingFromDb,
   saveStoreSettingToDb
 } from '../services/supabaseService'
@@ -1166,6 +1167,27 @@ export function StoreProvider({ children }) {
     showToast(`Pedido ${orderId} atualizado para: ${status}`)
   }, [showToast])
 
+  const deleteOrder = useCallback(async (orderId) => {
+    if (!orderId) return
+    setOrders(prev => {
+      const updated = prev.filter(o => o.id !== orderId)
+      try {
+        localStorage.setItem('infodesk_orders', JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+
+    if (isSupabaseConfigured) {
+      try {
+        await deleteOrderFromDb(orderId)
+      } catch (err) {
+        console.warn('Supabase delete order error:', err)
+      }
+    }
+
+    showToast(`Pedido #${orderId} excluído com sucesso. 🗑️`)
+  }, [showToast])
+
   // === Filtered Products (Memoizado) ===
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -1217,7 +1239,7 @@ export function StoreProvider({ children }) {
     // Products
     addProduct, updateProduct, deleteProduct, clearAllProducts,
     // Orders
-    createOrder, updateOrderStatus,
+    createOrder, updateOrderStatus, deleteOrder,
     // Admin & Auth
     isAdmin, adminSession, adminConfig, globalTaxRate: adminConfig.globalTaxRate ?? 10,
     loginAdmin, logoutAdmin, changeAdminPassword, updateGlobalTaxRate,

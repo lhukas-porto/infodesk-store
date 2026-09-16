@@ -480,6 +480,16 @@ export async function fetchOrdersFromDb() {
       customerCity: o.customer_city,
       customerState: o.customer_state,
       customerCep: o.customer_cep,
+      cliente: {
+        nome: o.customer_name || '',
+        email: o.customer_email || '',
+        cpf: o.customer_cpf || '',
+        telefone: o.customer_phone || '',
+        endereco: o.customer_address || '',
+        cidade: o.customer_city || '',
+        estado: o.customer_state || '',
+        cep: o.customer_cep || ''
+      },
       items: o.items,
       subtotal: parseFloat(o.subtotal),
       frete: parseFloat(o.frete),
@@ -558,6 +568,32 @@ export async function updateOrderInDb(orderId, updates) {
     return true
   } catch (err) {
     console.warn('Supabase: Falha ao atualizar pedido:', err)
+    return false
+  }
+}
+
+export async function deleteOrderFromDb(orderId) {
+  if (!isSupabaseConfigured || !supabase || !orderId) return false
+  try {
+    // 1. Marca como Deletado (soft delete compatível com RLS e neq status Deletado)
+    const { error: softErr } = await supabase
+      .from('orders')
+      .update({ status: 'Deletado' })
+      .eq('id', orderId)
+
+    // 2. Tenta também exclusão física se houver privilégio no RLS
+    try {
+      await supabase.from('payment_orders').delete().eq('order_id', orderId)
+      await supabase.from('orders').delete().eq('id', orderId)
+    } catch {}
+
+    if (softErr) {
+      console.warn('Supabase: Erro ao deletar pedido:', softErr.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('Supabase: Falha ao deletar pedido:', err)
     return false
   }
 }
