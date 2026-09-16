@@ -78,8 +78,9 @@ export function applyStoreSeo({
 }) {
   if (typeof document === 'undefined') return
 
-  const title = seoTitle || `${storeName} — Tudo o que você precisa em um só lugar`
-  const description = seoDescription || `${storeName} com ofertas em tecnologia, escritório e variedades. Frete rápido e pagamento seguro.`
+  const nomeFantasia = companyData?.nomeFantasia?.trim() || storeName || 'Minha Loja'
+  const title = seoTitle || nomeFantasia
+  const description = seoDescription || `${nomeFantasia} com ofertas em tecnologia, escritório e variedades. Frete rápido e pagamento seguro.`
   const canonicalUrl = `https://${primaryDomain}/`
   const defaultImage = shareImage || `${canonicalUrl}assets/store-logo.png`
 

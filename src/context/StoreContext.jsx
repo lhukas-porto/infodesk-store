@@ -470,11 +470,11 @@ export function StoreProvider({ children }) {
       .catch(err => console.warn('[StoreContext] Aviso ao buscar dados da empresa:', err))
   }, [])
 
-  // Atualiza título, favicon e meta description da página em tempo real
+  // Atualiza título, favicon, meta description e paleta de cores da marca em tempo real
   useEffect(() => {
-    const publicName = getCompanyPublicName(companyData)
-    if (publicName) {
-      document.title = `${publicName} — Tudo o que você precisa em um só lugar`
+    const nomeFantasia = companyData?.nomeFantasia?.trim() || getCompanyPublicName(companyData)
+    if (nomeFantasia) {
+      document.title = nomeFantasia
     }
 
     if (companyData.descricaoCurta) {
