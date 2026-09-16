@@ -118,7 +118,7 @@ export function applyStoreSeo({
     url: canonicalUrl,
     logo: defaultImage,
     telephone: companyData?.telefone || companyData?.whatsapp || '',
-    email: companyData?.emailPrincipal || companyData?.emailAtendimento || '',
+    email: companyData?.emailPrincipal || '',
     address: {
       '@type': 'PostalAddress',
       streetAddress: `${companyData?.endereco || ''}, ${companyData?.numero || ''}`,

@@ -1,5 +1,5 @@
 // Módulo de Consulta à API de Preço dos Correios (Lote Nacional)
-import { CORREIOS_CONFIG, CORREIOS_SERVICES } from './config.js'
+import { CORREIOS_CONFIG, CORREIOS_SERVICES, getStoreCorreiosConfig } from './config.js'
 
 /**
  * Converte valor de moeda brasileira (ex: "24,54" ou "1.234,56") para número float JS
@@ -29,12 +29,16 @@ export function parseBrazilianCurrency(value) {
  * @param {string} token - Bearer Token
  * @param {string} cepDestino - CEP de destino limpo (8 dígitos)
  * @param {{ weightG: number, length: number, width: number, height: number }} packageInfo - Dados do pacote
+ * @param {object} [options] - Parâmetros opcionais (contrato, dr, cepOrigem, storeId)
  * @returns {Promise<Array<{ coProduto: string, nuRequisicao: string, pcFinal: number, raw: object }>>}
  */
-export async function fetchCorreiosPrice(token, cepDestino, packageInfo) {
-  const contrato = CORREIOS_CONFIG.contrato
-  const dr = CORREIOS_CONFIG.dr
-  const cepOrigem = CORREIOS_CONFIG.cepOrigem
+export async function fetchCorreiosPrice(token, cepDestino, packageInfo, options = {}) {
+  const storeId = options.storeId || 'default'
+  const storeCfg = getStoreCorreiosConfig(storeId)
+
+  const contrato = options.contrato || storeCfg.contrato || CORREIOS_CONFIG.contrato
+  const dr = options.dr || storeCfg.dr || CORREIOS_CONFIG.dr
+  const cepOrigem = (options.cepOrigem || storeCfg.cepOrigem || CORREIOS_CONFIG.cepOrigem || '').replace(/\D/g, '')
   const idLote = `LOTE-${Date.now()}`
 
   const parametrosProduto = CORREIOS_SERVICES.map(svc => ({

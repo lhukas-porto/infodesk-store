@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   Users, Search, Filter, ArrowUpDown, Eye, EyeOff, Shield,
   ShieldAlert, Lock, Key, Trash2, Edit3, Download, Plus,
@@ -11,6 +11,7 @@ import { useStore } from '../../context/StoreContext'
 import {
   maskCpf,
   maskPhone,
+  buildCustomerOrderIndex,
   getCustomerOrderMetrics,
   calculateCompanyCustomerStats,
   exportCustomersToCsv,
@@ -86,12 +87,38 @@ export default function AdminCustomersSection() {
   const [resetPassData, setResetPassData] = useState(null)
   const [copiedLink, setCopiedLink] = useState(false)
 
-  // KPIs gerais da empresa
-  const stats = useMemo(() => {
-    return calculateCompanyCustomerStats(customers, orders)
-  }, [customers, orders])
+  // 1. Índice O(1) de pedidos por e-mail e CPF (computado uma única vez por alteração nos pedidos)
+  const orderIndex = useMemo(() => {
+    return buildCustomerOrderIndex(orders)
+  }, [orders])
 
-  // Filtragem e busca avançada
+  // 2. Mapa de métricas memoizado para cada cliente (computado uma única vez por cliente)
+  const customerMetricsMap = useMemo(() => {
+    const map = new Map()
+    customers.forEach(c => {
+      const metrics = getCustomerOrderMetrics(c, orders, orderIndex)
+      if (c.id) map.set(c.id, metrics)
+      if (c.email) map.set(c.email.toLowerCase(), metrics)
+      if (c.cpf) map.set(c.cpf.replace(/\D/g, ''), metrics)
+    })
+    return map
+  }, [customers, orders, orderIndex])
+
+  // Função rápida de consulta O(1) com fallback seguro
+  const getMetrics = useCallback((c) => {
+    if (!c) return null
+    return (c.id && customerMetricsMap.get(c.id)) ||
+           (c.email && customerMetricsMap.get(c.email.toLowerCase())) ||
+           (c.cpf && customerMetricsMap.get(c.cpf.replace(/\D/g, ''))) ||
+           getCustomerOrderMetrics(c, orders, orderIndex)
+  }, [customerMetricsMap, orders, orderIndex])
+
+  // KPIs gerais da empresa (utiliza métricas pré-computadas instantâneas)
+  const stats = useMemo(() => {
+    return calculateCompanyCustomerStats(customers, orders, customerMetricsMap)
+  }, [customers, orders, customerMetricsMap])
+
+  // Filtragem e busca avançada de alta performance
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
       // 1. Busca textual
@@ -111,8 +138,8 @@ export default function AdminCustomersSection() {
         if (currentStatus !== statusFilter) return false
       }
 
-      // 3. Filtro de Pedidos
-      const metrics = getCustomerOrderMetrics(c, orders)
+      // 3. Filtro de Pedidos (usando métrica em cache O(1))
+      const metrics = getMetrics(c)
       if (ordersFilter === 'with_orders' && metrics.orderCount === 0) return false
       if (ordersFilter === 'no_orders' && metrics.orderCount > 0) return false
 
@@ -127,8 +154,8 @@ export default function AdminCustomersSection() {
 
       return true
     }).sort((a, b) => {
-      const metricsA = getCustomerOrderMetrics(a, orders)
-      const metricsB = getCustomerOrderMetrics(b, orders)
+      const metricsA = getMetrics(a)
+      const metricsB = getMetrics(b)
 
       if (sortBy === 'name_asc') return (a.nome || '').localeCompare(b.nome || '')
       if (sortBy === 'name_desc') return (b.nome || '').localeCompare(a.nome || '')
@@ -137,7 +164,7 @@ export default function AdminCustomersSection() {
       if (sortBy === 'created_asc') return new Date(a.createdAt || a.created_at || 0) - new Date(b.createdAt || b.created_at || 0)
       return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0) // default created_desc
     })
-  }, [customers, orders, searchTerm, statusFilter, ordersFilter, periodFilter, sortBy])
+  }, [customers, searchTerm, statusFilter, ordersFilter, periodFilter, sortBy, getMetrics])
 
   // Paginação
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / itemsPerPage))
@@ -472,7 +499,7 @@ export default function AdminCustomersSection() {
               </tr>
             ) : (
               paginatedCustomers.map(customer => {
-                const metrics = getCustomerOrderMetrics(customer, orders)
+                const metrics = getMetrics(customer)
                 const isCpfRevealed = revealedCpfs.has(customer.id)
                 const displayCpf = isCpfRevealed ? (customer.cpf || 'Não informado') : maskCpf(customer.cpf)
                 const displayPhone = maskPhone(customer.telefone)
@@ -720,7 +747,7 @@ export default function AdminCustomersSection() {
             <div className="adm-tabs" style={{ padding: '0 24px', borderBottom: '1px solid var(--dark-800)', background: 'var(--dark-900)' }}>
               {[
                 { id: 'profile', label: 'Dados Cadastrais', icon: <Users size={15} /> },
-                { id: 'orders', label: `Pedidos (${getCustomerOrderMetrics(selectedCustomer, orders).orderCount})`, icon: <ShoppingCart size={15} /> },
+                { id: 'orders', label: `Pedidos (${getMetrics(selectedCustomer)?.orderCount || 0})`, icon: <ShoppingCart size={15} /> },
                 { id: 'intelligence', label: 'Inteligência de Compras', icon: <TrendingUp size={15} /> },
                 { id: 'notes', label: 'Observações Internas', icon: <MessageSquare size={15} /> },
                 { id: 'audit', label: 'Auditoria & Logs (LGPD)', icon: <ShieldCheck size={15} /> }
@@ -944,7 +971,7 @@ export default function AdminCustomersSection() {
               {detailTab === 'orders' && (
                 <div>
                   {(() => {
-                    const metrics = getCustomerOrderMetrics(selectedCustomer, orders)
+                    const metrics = getMetrics(selectedCustomer)
                     if (metrics.orders.length === 0) {
                       return (
                         <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dark-400)' }}>
@@ -1016,7 +1043,7 @@ export default function AdminCustomersSection() {
               {detailTab === 'intelligence' && (
                 <div>
                   {(() => {
-                    const metrics = getCustomerOrderMetrics(selectedCustomer, orders)
+                    const metrics = getMetrics(selectedCustomer)
                     return (
                       <div>
                         {/* Indicadores de Consumo */}

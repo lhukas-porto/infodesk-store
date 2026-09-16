@@ -26,9 +26,33 @@ export function maskPhone(phone) {
 }
 
 /**
+ * Cria um índice rápido de pedidos indexados por e-mail e CPF para busca O(1)
+ */
+export function buildCustomerOrderIndex(allOrders = []) {
+  const byEmail = new Map()
+  const byCpf = new Map()
+
+  ;(allOrders || []).forEach(o => {
+    const email = (o.customer_email || o.customerEmail || o.cliente?.email || '').toLowerCase().trim()
+    const cpf = (o.customer_cpf || o.customerCpf || o.cliente?.cpf || '').replace(/\D/g, '')
+
+    if (email) {
+      if (!byEmail.has(email)) byEmail.set(email, [])
+      byEmail.get(email).push(o)
+    }
+    if (cpf) {
+      if (!byCpf.has(cpf)) byCpf.set(cpf, [])
+      byCpf.get(cpf).push(o)
+    }
+  })
+
+  return { byEmail, byCpf }
+}
+
+/**
  * Calcula todas as métricas consolidadas de consumo e pedidos de um cliente
  */
-export function getCustomerOrderMetrics(customer, allOrders = []) {
+export function getCustomerOrderMetrics(customer, allOrders = [], orderIndex = null) {
   if (!customer) {
     return {
       orderCount: 0,
@@ -44,12 +68,30 @@ export function getCustomerOrderMetrics(customer, allOrders = []) {
   const cleanEmail = (customer.email || '').toLowerCase().trim()
   const cleanCpf = (customer.cpf || '').replace(/\D/g, '')
 
-  // Identifica pedidos do cliente por e-mail ou CPF
-  const clientOrders = (allOrders || []).filter(o => {
-    const oEmail = (o.customer_email || o.customerEmail || o.cliente?.email || '').toLowerCase().trim()
-    const oCpf = (o.customer_cpf || o.customerCpf || o.cliente?.cpf || '').replace(/\D/g, '')
-    return (cleanEmail && oEmail === cleanEmail) || (cleanCpf && oCpf === cleanCpf)
-  }).sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date))
+  let clientOrders = []
+  if (orderIndex) {
+    const ordersFromEmail = cleanEmail ? (orderIndex.byEmail.get(cleanEmail) || []) : []
+    const ordersFromCpf = cleanCpf ? (orderIndex.byCpf.get(cleanCpf) || []) : []
+    if (ordersFromEmail.length && ordersFromCpf.length) {
+      const seen = new Set()
+      clientOrders = [...ordersFromEmail, ...ordersFromCpf].filter(o => {
+        if (seen.has(o.id)) return false
+        seen.add(o.id)
+        return true
+      })
+    } else {
+      clientOrders = ordersFromEmail.length ? ordersFromEmail : ordersFromCpf
+    }
+  } else {
+    // Identifica pedidos do cliente por e-mail ou CPF
+    clientOrders = (allOrders || []).filter(o => {
+      const oEmail = (o.customer_email || o.customerEmail || o.cliente?.email || '').toLowerCase().trim()
+      const oCpf = (o.customer_cpf || o.customerCpf || o.cliente?.cpf || '').replace(/\D/g, '')
+      return (cleanEmail && oEmail === cleanEmail) || (cleanCpf && oCpf === cleanCpf)
+    })
+  }
+
+  clientOrders = [...clientOrders].sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date))
 
   const orderCount = clientOrders.length
   const totalSpent = clientOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0)
@@ -118,7 +160,7 @@ export function getCustomerOrderMetrics(customer, allOrders = []) {
 /**
  * Calcula os KPIs gerais da base de clientes da empresa
  */
-export function calculateCompanyCustomerStats(customers = [], orders = []) {
+export function calculateCompanyCustomerStats(customers = [], orders = [], metricsMap = null) {
   const totalCustomers = customers.length
 
   const now = new Date()
@@ -134,10 +176,11 @@ export function calculateCompanyCustomerStats(customers = [], orders = []) {
       newCustomers30d += 1
     }
 
-    const { orderCount, totalSpent } = getCustomerOrderMetrics(cust, orders)
-    if (orderCount > 0) {
+    const metrics = (metricsMap && (metricsMap.get(cust.id) || metricsMap.get((cust.email || '').toLowerCase()))) ||
+                    getCustomerOrderMetrics(cust, orders)
+    if (metrics.orderCount > 0) {
       buyerCustomersCount += 1
-      totalRevenueFromBuyers += totalSpent
+      totalRevenueFromBuyers += metrics.totalSpent
     }
   })
 

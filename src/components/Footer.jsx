@@ -48,7 +48,7 @@ export default function Footer() {
 
   const rawWhatsapp = (companyData?.whatsapp || '61996272630').replace(/\D/g, '')
   const whatsappUrl = `https://wa.me/55${rawWhatsapp}`
-  const contactEmail = companyData?.emailPrincipal || companyData?.emailAtendimento || 'lucas@infodesk.net.br'
+  const contactEmail = companyData?.emailPrincipal || 'contato@infodesk.net.br'
 
   const handleSecretClick = () => {
     clickCount.current += 1

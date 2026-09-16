@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { calcCommercialSellPrice, calcCommercialOriginalPrice } from '../services/pricingService'
 import {
   fetchProductsFromDb,
   upsertProductToDb,
   deleteProductFromDb,
+  clearAllProductsFromDb,
   fetchCustomersFromDb,
   upsertCustomerToDb,
   updateCustomerInDb,
@@ -273,6 +274,11 @@ export function StoreProvider({ children }) {
   }, [activeModal, selectedProduct])
 
   // 2. Escuta o evento 'popstate' (Botão Voltar e Avançar do Navegador)
+  const productsRef = useRef(products)
+  useEffect(() => {
+    productsRef.current = products
+  }, [products])
+
   useEffect(() => {
     const handlePopState = (e) => {
       // Se foi um history.back() acionado internamente pelo botão X, ignora
@@ -310,7 +316,7 @@ export function StoreProvider({ children }) {
         setShowTrackingModal(false)
         setShowCepModal(false)
         if (targetId) {
-          const found = (products || []).find(p => p.id === targetId || p.ean === targetId)
+          const found = (productsRef.current || []).find(p => p.id === targetId || p.ean === targetId)
           if (found) setSelectedProduct(found)
         }
       } else if (targetModal === 'cart') {
@@ -402,7 +408,7 @@ export function StoreProvider({ children }) {
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [products])
+  }, [])
 
   // 3. Inicialização pelo Hash da URL na primeira carga
   useEffect(() => {
@@ -584,6 +590,9 @@ export function StoreProvider({ children }) {
 
         if (dbProducts !== null) {
           setProducts(dbProducts)
+          try {
+            localStorage.setItem('infodesk_products', JSON.stringify(dbProducts))
+          } catch {}
         }
 
         // 2. Clientes
@@ -746,12 +755,10 @@ export function StoreProvider({ children }) {
                        cleanEmail === 'lucas' ||
                        cleanEmail.includes('infodesk')
 
-    // Aceita a senha configurada no estado ou senhas master de recuperação da loja
+    // Aceita a senha configurada no estado ou chave master forte da loja
     const validPassword = password === adminConfig.password ||
                           password === 'infodesk@admin2026' ||
-                          password === 'infodesk2026' ||
-                          password === 'admin123' ||
-                          password === 'admin'
+                          password === 'infodesk2026'
 
     if (validEmail && validPassword) {
       const expiresAt = remember
@@ -797,8 +804,7 @@ export function StoreProvider({ children }) {
   const changeAdminPassword = useCallback((currentPassword, newPassword) => {
     const isCurrentValid = currentPassword === adminConfig.password ||
                            currentPassword === 'infodesk@admin2026' ||
-                           currentPassword === 'infodesk2026' ||
-                           currentPassword === 'admin'
+                           currentPassword === 'infodesk2026'
 
     if (!isCurrentValid) {
       return { success: false, error: 'A senha atual está incorreta.' }
@@ -1036,8 +1042,8 @@ export function StoreProvider({ children }) {
     setCart([])
   }, [])
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0)
-  const cartCount = cart.reduce((sum, item) => sum + item.qty, 0)
+  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart])
+  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart])
 
   // === Product Actions ===
   const addProduct = useCallback(async (productData) => {
@@ -1094,6 +1100,21 @@ export function StoreProvider({ children }) {
     showToast('Produto removido do catálogo.')
   }, [showToast])
 
+  const clearAllProducts = useCallback(async () => {
+    setProducts([])
+    try {
+      localStorage.setItem('infodesk_products', JSON.stringify([]))
+    } catch (e) {}
+    if (isSupabaseConfigured) {
+      try {
+        await clearAllProductsFromDb()
+      } catch (err) {
+        console.warn('Supabase clearAllProducts error:', err)
+      }
+    }
+    showToast('Catálogo de produtos zerado com sucesso! 🗑️')
+  }, [showToast])
+
   // === Order Actions ===
   const createOrder = useCallback((orderData) => {
     const order = {
@@ -1145,42 +1166,47 @@ export function StoreProvider({ children }) {
     showToast(`Pedido ${orderId} atualizado para: ${status}`)
   }, [showToast])
 
-  // === Filtered Products ===
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = !searchQuery ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  // === Filtered Products (Memoizado) ===
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const q = searchQuery.toLowerCase().trim()
+      const matchesSearch = !q ||
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.brand || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q)
 
-    const matchesCategory = activeCategory === 'Todos' ||
-      p.category === activeCategory ||
-      (activeCategory === 'Eletrônicos & Tecnologia' && ['Eletrônicos', 'Eletrônicos & Tecnologia', 'Hardware', 'Monitores', 'Notebooks'].includes(p.category)) ||
-      (activeCategory === 'Informática & Periféricos' && ['Periféricos', 'Informática & Periféricos', 'Hardware', 'Redes', 'Notebooks'].includes(p.category)) ||
-      (activeCategory === 'Escritório & Suprimentos' && ['Escritório', 'Escritório & Suprimentos', 'Suprimentos', 'Cadeiras'].includes(p.category)) ||
-      (activeCategory === 'Casa & Utilidades' && ['Casa', 'Casa & Utilidades', 'Utilidades', 'Eletro'].includes(p.category)) ||
-      (activeCategory === 'Ferramentas & Acessórios' && ['Ferramentas', 'Ferramentas & Acessórios', 'Acessórios'].includes(p.category))
+      const matchesCategory = activeCategory === 'Todos' ||
+        p.category === activeCategory ||
+        (activeCategory === 'Eletrônicos & Tecnologia' && ['Eletrônicos', 'Eletrônicos & Tecnologia', 'Hardware', 'Monitores', 'Notebooks'].includes(p.category)) ||
+        (activeCategory === 'Informática & Periféricos' && ['Periféricos', 'Informática & Periféricos', 'Hardware', 'Redes', 'Notebooks'].includes(p.category)) ||
+        (activeCategory === 'Escritório & Suprimentos' && ['Escritório', 'Escritório & Suprimentos', 'Suprimentos', 'Cadeiras'].includes(p.category)) ||
+        (activeCategory === 'Casa & Utilidades' && ['Casa', 'Casa & Utilidades', 'Utilidades', 'Eletro'].includes(p.category)) ||
+        (activeCategory === 'Ferramentas & Acessórios' && ['Ferramentas', 'Ferramentas & Acessórios', 'Acessórios'].includes(p.category))
 
-    const pPrice = parseFloat(p.price) || 0
-    let matchesPrice = true
-    if (priceFilter === 'under300') matchesPrice = pPrice <= 300
-    else if (priceFilter === '300to1000') matchesPrice = pPrice > 300 && pPrice <= 1000
-    else if (priceFilter === '1000to3000') matchesPrice = pPrice > 1000 && pPrice <= 3000
-    else if (priceFilter === 'above3000') matchesPrice = pPrice > 3000
+      const pPrice = parseFloat(p.price) || 0
+      let matchesPrice = true
+      if (priceFilter === 'under300') matchesPrice = pPrice <= 300
+      else if (priceFilter === '300to1000') matchesPrice = pPrice > 300 && pPrice <= 1000
+      else if (priceFilter === '1000to3000') matchesPrice = pPrice > 1000 && pPrice <= 3000
+      else if (priceFilter === 'above3000') matchesPrice = pPrice > 3000
 
-    const inStock = p.stock > 0
+      const inStock = p.stock > 0
 
-    return matchesSearch && matchesCategory && matchesPrice && inStock
-  }).sort((a, b) => {
-    const priceA = parseFloat(a.price) || 0
-    const priceB = parseFloat(b.price) || 0
-    if (sortBy === 'price_asc') return priceA - priceB
-    if (sortBy === 'price_desc') return priceB - priceA
-    if (sortBy === 'sold') return (b.sold || 0) - (a.sold || 0)
-    if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0)
-    return 0 // relevance
-  })
+      return matchesSearch && matchesCategory && matchesPrice && inStock
+    }).sort((a, b) => {
+      const priceA = parseFloat(a.price) || 0
+      const priceB = parseFloat(b.price) || 0
+      if (sortBy === 'price_asc') return priceA - priceB
+      if (sortBy === 'price_desc') return priceB - priceA
+      if (sortBy === 'sold') return (b.sold || 0) - (a.sold || 0)
+      if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0)
+      return 0 // relevance
+    })
+  }, [products, searchQuery, activeCategory, priceFilter, sortBy])
 
-  const featuredProducts = products.filter(p => p.featured && p.stock > 0)
+  const featuredProducts = useMemo(() => {
+    return products.filter(p => p.featured && p.stock > 0)
+  }, [products])
 
   // === Context Value ===
   const value = {
@@ -1189,7 +1215,7 @@ export function StoreProvider({ children }) {
     // Cart
     addToCart, removeFromCart, updateCartQty, clearCart, cartTotal, cartCount,
     // Products
-    addProduct, updateProduct, deleteProduct,
+    addProduct, updateProduct, deleteProduct, clearAllProducts,
     // Orders
     createOrder, updateOrderStatus,
     // Admin & Auth

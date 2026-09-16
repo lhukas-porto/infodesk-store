@@ -21,11 +21,18 @@ function getRegiaoPorCep(cep) {
   return 'NORTE_CO'
 }
 
-// Consulta oficial de endereço na base dos Correios via API ViaCEP
+// Cache em memória para evitar requisições redundantes de rede
+const cepCache = new Map()
+
+// Consulta oficial de endereço na base dos Correios via API ViaCEP (com cache O(1))
 export async function consultarCep(cep) {
-  const cleanCep = cep.replace(/\D/g, '')
+  const cleanCep = (cep || '').replace(/\D/g, '')
   if (cleanCep.length !== 8) {
     return { success: false, error: 'CEP deve conter 8 dígitos.' }
+  }
+
+  if (cepCache.has(cleanCep)) {
+    return cepCache.get(cleanCep)
   }
 
   try {
@@ -49,7 +56,7 @@ export async function consultarCep(cep) {
       }
     }
 
-    return {
+    const result = {
       success: true,
       logradouro,
       bairro,
@@ -57,6 +64,9 @@ export async function consultarCep(cep) {
       estado: data.uf || '',
       cep: data.cep || formatCep(cleanCep),
     }
+
+    cepCache.set(cleanCep, result)
+    return result
   } catch (err) {
     console.error('Erro ao consultar CEP:', err)
     return { success: false, error: 'Não foi possível consultar os Correios no momento.' }

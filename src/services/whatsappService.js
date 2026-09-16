@@ -80,7 +80,7 @@ export function buildShippingNotificationMessage(order, companyData = null) {
 
   if (trackingCode) {
     msg += `🔎 *Código de Rastreamento dos Correios:*\n*${trackingCode}*\n\n`
-    msg += `Você pode acompanhar cada etapa em nosso site na opção *Rastrear Pedido* ou pelo link oficial:\n`
+    msg += `Você pode acompanhar cada etapa em nosso site em *Meus Pedidos > Detalhes do Pedido* ou pelo link oficial:\n`
     msg += `https://rastreamento.correios.com.br/app/index.php?codigo=${trackingCode}\n\n`
   }
 

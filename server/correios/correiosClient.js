@@ -81,12 +81,20 @@ export async function quoteShipping(cepDestino, items, storeId = 'default') {
   while (attempt < 2) {
     attempt++
     try {
-      const token = await getCorreiosToken(attempt > 1)
+      const token = await getCorreiosToken(attempt > 1, storeId)
 
       // Cotação paralela de Preço e Prazo
       const [priceResults, deadlineResults] = await Promise.all([
-        fetchCorreiosPrice(token, cleanCep, packageInfo),
-        fetchCorreiosDeadline(token, cleanCep)
+        fetchCorreiosPrice(token, cleanCep, packageInfo, {
+          contrato: storeCfg.contrato,
+          dr: storeCfg.dr,
+          cepOrigem: storeCfg.cepOrigem,
+          storeId
+        }),
+        fetchCorreiosDeadline(token, cleanCep, {
+          cepOrigem: storeCfg.cepOrigem,
+          storeId
+        })
       ])
 
       // 5. Combina os resultados por código de serviço / coProduto respeitando ativação

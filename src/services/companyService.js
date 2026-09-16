@@ -8,7 +8,6 @@ export const DEFAULT_COMPANY_DATA = {
   inscricaoEstadual: '',
   inscricaoMunicipal: '',
   emailPrincipal: 'contato@minhaloja.com.br',
-  emailAtendimento: 'atendimento@minhaloja.com.br',
   telefone: '',
   whatsapp: '',
   site: 'https://minhaloja.com.br',

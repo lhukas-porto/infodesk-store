@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   X, Package, DollarSign, ShoppingCart, BarChart3, Plus, ArrowLeft,
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
@@ -40,7 +40,7 @@ export default function AdminDashboard() {
   const {
     showAdminDashboard, setShowAdminDashboard,
     products, orders, customers = [], logoutAdmin,
-    addProduct, updateProduct, deleteProduct,
+    addProduct, updateProduct, deleteProduct, clearAllProducts,
     updateOrderStatus, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
     globalTaxRate, updateGlobalTaxRate,
@@ -80,6 +80,8 @@ export default function AdminDashboard() {
   const [labelOrderToPrint, setLabelOrderToPrint] = useState(null)
   const [productToDelete, setProductToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showClearCatalogModal, setShowClearCatalogModal] = useState(false)
+  const [isClearingCatalog, setIsClearingCatalog] = useState(false)
   const [orderToEditTracking, setOrderToEditTracking] = useState(null)
   const [trackingCodeInput, setTrackingCodeInput] = useState('')
   const [productSearch, setProductSearch] = useState('')
@@ -265,11 +267,7 @@ export default function AdminDashboard() {
       return
     }
     if (companyForm.emailPrincipal && !isValidEmail(companyForm.emailPrincipal)) {
-      showToast('E-mail principal inválido.', 'error')
-      return
-    }
-    if (companyForm.emailAtendimento && !isValidEmail(companyForm.emailAtendimento)) {
-      showToast('E-mail de atendimento inválido.', 'error')
+      showToast('E-mail institucional/contato inválido.', 'error')
       return
     }
 
@@ -322,9 +320,11 @@ export default function AdminDashboard() {
       .catch(err => console.warn('Erro ao carregar configurações dos Correios do backend:', err))
   }, [])
 
-  // Sincroniza ao abrir o painel e ao selecionar a aba de frete
+  // Sincroniza apenas quando o usuário selecionar a aba de frete
   useEffect(() => {
-    syncCorreiosFromBackend(correiosForm.storeId || 'default')
+    if (tab === 'shipping') {
+      syncCorreiosFromBackend(correiosForm.storeId || 'default')
+    }
   }, [tab, correiosForm.storeId, syncCorreiosFromBackend])
 
   // Suporte global para sair/fechar pelo ESC (fecha modais aninhados primeiro)
@@ -350,6 +350,34 @@ export default function AdminDashboard() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showAdminDashboard, orderToEditTracking, productToDelete, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
+
+  // Stats e filtros memoizados no topo incondicional (Rules of Hooks)
+  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + (o.total || 0), 0), [orders])
+  const totalOrders = orders.length
+  const totalProducts = products.length
+  const lowStock = useMemo(() => products.filter(p => (parseInt(p.stock) || 0) <= 5).length, [products])
+
+  const existingBrands = useMemo(() => {
+    return Array.from(
+      new Set([
+        'ASUS', 'Logitech', 'Corsair', 'Kingston', 'Samsung', 'Dell', 'Intel', 'AMD',
+        'Razer', 'HyperX', 'NVIDIA', 'Western Digital', 'Seagate', 'TP-Link', 'LG',
+        'Acer', 'Lenovo', 'Redragon', 'Crucial', 'Gigabyte', 'MSI',
+        ...products.map(p => p.brand).filter(Boolean)
+      ])
+    ).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [products])
+
+  const filteredAdminProducts = useMemo(() => {
+    if (!productSearch.trim()) return products
+    const q = productSearch.toLowerCase().trim()
+    return products.filter(p => {
+      return (p.name || '').toLowerCase().includes(q) ||
+             (p.brand || '').toLowerCase().includes(q) ||
+             (p.category || '').toLowerCase().includes(q) ||
+             (p.ean && p.ean.includes(q))
+    })
+  }, [products, productSearch])
 
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
@@ -419,21 +447,6 @@ export default function AdminDashboard() {
   }
 
   if (!showAdminDashboard) return null
-
-  // Stats
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0)
-  const totalOrders = orders.length
-  const totalProducts = products.length
-  const lowStock = products.filter(p => (parseInt(p.stock) || 0) <= 5).length
-  // Lista dinâmica e unificada de marcas salvas (existentes no catálogo + marcas de tecnologia)
-  const existingBrands = Array.from(
-    new Set([
-      'ASUS', 'Logitech', 'Corsair', 'Kingston', 'Samsung', 'Dell', 'Intel', 'AMD',
-      'Razer', 'HyperX', 'NVIDIA', 'Western Digital', 'Seagate', 'TP-Link', 'LG',
-      'Acer', 'Lenovo', 'Redragon', 'Crucial', 'Gigabyte', 'MSI',
-      ...products.map(p => p.brand).filter(Boolean)
-    ])
-  ).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
 
   // Auto price calculation formula: Custo * (1 + Imposto%) * (1 + Margem%) com arredondamento comercial (final 5 ou 9)
   const calcSellPrice = (cost, tax, margin) => {
@@ -665,16 +678,6 @@ export default function AdminDashboard() {
       setPassError(res.error)
     }
   }
-
-  // Filter products for admin table
-  const filteredAdminProducts = products.filter(p => {
-    if (!productSearch) return true
-    const q = productSearch.toLowerCase()
-    return p.name.toLowerCase().includes(q) ||
-           p.brand.toLowerCase().includes(q) ||
-           p.category.toLowerCase().includes(q) ||
-           (p.ean && p.ean.includes(q))
-  })
 
   // Formulário inteligente e reutilizável de cadastro de novo produto
   const renderAddProductForm = () => (
@@ -1173,9 +1176,9 @@ export default function AdminDashboard() {
             { id: 'customers', icon: <Users size={16} />, label: `Clientes (${customers.length})` },
             { id: 'marketing', icon: <Globe size={16} />, label: 'SEO e Divulgação' },
             { id: 'company', icon: <Building2 size={16} />, label: 'Dados da Empresa' },
-            { id: 'shipping', icon: <Truck size={16} />, label: 'Frete & Entregas' },
-            { id: 'payments', icon: <CreditCard size={16} />, label: 'Pagamentos (MP)' },
-            { id: 'security', icon: <KeyRound size={16} />, label: 'Segurança & Senha' },
+            { id: 'shipping', icon: <Truck size={16} />, label: 'Entregas' },
+            { id: 'payments', icon: <CreditCard size={16} />, label: 'Pagamentos' },
+            { id: 'security', icon: <KeyRound size={16} />, label: 'Senhas' },
           ].map(t => (
             <button key={t.id} className={`adm-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
               {t.icon} {t.label}
@@ -1297,7 +1300,15 @@ export default function AdminDashboard() {
 
           {/* SEO e Divulgação Multiloja */}
           {tab === 'marketing' && (
-            <AdminMarketingSection />
+            <AdminMarketingSection
+              products={products}
+              orders={orders}
+              companyData={companyData}
+              showToast={showToast}
+              onEditProduct={(prod) => {
+                setEditingProduct(prod)
+              }}
+            />
           )}
 
           {/* Products Management (Catálogo & Cadastro Inteligente) */}
@@ -1314,7 +1325,7 @@ export default function AdminDashboard() {
                 borderBottom: '1px solid var(--dark-200)',
                 paddingBottom: '12px'
               }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button
                     type="button"
                     className={`btn btn-sm ${productViewMode === 'list' ? 'btn-primary' : 'btn-outline'}`}
@@ -1331,6 +1342,17 @@ export default function AdminDashboard() {
                   >
                     <Plus size={16} /> Cadastrar Produto
                   </button>
+                  {products.length > 0 && productViewMode === 'list' && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setShowClearCatalogModal(true)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: 'var(--red)', color: 'var(--red)' }}
+                      title="Apagar todos os produtos do catálogo e do banco de dados"
+                    >
+                      <Trash2 size={14} /> Zerar Catálogo
+                    </button>
+                  )}
                 </div>
 
                 {productViewMode === 'add' && (
@@ -1614,9 +1636,6 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Add Product (Retrocompatibilidade de atalho) */}
-          {tab === 'add' && renderAddProductForm()}
-
           {/* Shipping & Delivery Tab (Correios Multiempresa) */}
           {tab === 'shipping' && (
             <div className="adm-shipping-tab">
@@ -1754,7 +1773,7 @@ export default function AdminDashboard() {
                           onChange={e => setCorreiosForm({ ...correiosForm, pacEnabled: e.target.checked })}
                           style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
                         />
-                        <span><strong>PAC</strong> (coProduto 03298 — Encomenda Econômica)</span>
+                        <span><strong>PAC</strong> (Encomenda Econômica)</span>
                       </label>
 
                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -1764,7 +1783,7 @@ export default function AdminDashboard() {
                           onChange={e => setCorreiosForm({ ...correiosForm, sedexEnabled: e.target.checked })}
                           style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
                         />
-                        <span><strong>SEDEX</strong> (coProduto 03220 — Encomenda Expressa)</span>
+                        <span><strong>SEDEX</strong> (Encomenda Expressa)</span>
                       </label>
                     </div>
                   </div>
@@ -1930,8 +1949,8 @@ export default function AdminDashboard() {
                       <Phone size={16} /> Contatos & Canais Oficiais de Atendimento
                     </h4>
                     <div className="adm-form-grid">
-                      <div className="ck-field adm-col-6">
-                        <label>E-mail Principal *</label>
+                      <div className="ck-field adm-col-12">
+                        <label>E-mail de Contato / Institucional *</label>
                         <input
                           type="email"
                           className="input-field"
@@ -1939,16 +1958,6 @@ export default function AdminDashboard() {
                           onChange={e => setCompanyForm({ ...companyForm, emailPrincipal: e.target.value })}
                           placeholder="contato@suaempresa.com.br"
                           required
-                        />
-                      </div>
-                      <div className="ck-field adm-col-6">
-                        <label>E-mail de Atendimento</label>
-                        <input
-                          type="email"
-                          className="input-field"
-                          value={companyForm.emailAtendimento || ''}
-                          onChange={e => setCompanyForm({ ...companyForm, emailAtendimento: e.target.value })}
-                          placeholder="suporte@suaempresa.com.br"
                         />
                       </div>
                       <div className="ck-field adm-col-6">
@@ -2876,6 +2885,60 @@ export default function AdminDashboard() {
                   }}
                 >
                   <Trash2 size={16} /> Sim, Excluir Produto
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================
+            MODAL DE CONFIRMAÇÃO DE ZERAR CATÁLOGO COMPLETO
+           ========================================================= */}
+        {showClearCatalogModal && (
+          <div className="overlay" style={{ zIndex: 760 }}>
+            <div className="modal" style={{ maxWidth: 460, textAlign: 'center', padding: 'var(--space-6)' }}>
+              <div style={{
+                width: 60,
+                height: 60,
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.12)',
+                color: 'var(--red)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto var(--space-4)'
+              }}>
+                <AlertTriangle size={32} />
+              </div>
+              <h3 style={{ marginBottom: 'var(--space-2)' }}>Zerar Todos os Produtos?</h3>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--dark-600)', marginBottom: 'var(--space-5)', lineHeight: 1.5 }}>
+                Esta ação vai remover permanentemente todos os <strong>{products.length} produtos</strong> do catálogo e do banco de dados na nuvem (Supabase). O catálogo ficará 100% zerado para você cadastrar seus novos produtos do zero.
+              </p>
+              <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={isClearingCatalog}
+                  onClick={() => setShowClearCatalogModal(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={isClearingCatalog}
+                  style={{ background: 'var(--red)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  onClick={async () => {
+                    setIsClearingCatalog(true)
+                    try {
+                      await clearAllProducts()
+                      setShowClearCatalogModal(false)
+                    } finally {
+                      setIsClearingCatalog(false)
+                    }
+                  }}
+                >
+                  <Trash2 size={16} /> {isClearingCatalog ? 'Apagando...' : 'Sim, Zerar Tudo'}
                 </button>
               </div>
             </div>

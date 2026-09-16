@@ -61,6 +61,22 @@ async function getHandler(path) {
 export default async function handler(req, res) {
   const path = req.url?.split('?')[0] || '/'
 
+  if (!res.status) {
+    res.status = function(code) {
+      this.statusCode = code
+      return this
+    }
+  }
+  if (!res.json) {
+    res.json = function(data) {
+      if (!this.getHeader?.('Content-Type')) {
+        this.setHeader?.('Content-Type', 'application/json')
+      }
+      this.end(JSON.stringify(data))
+      return this
+    }
+  }
+
   try {
     const routeHandler = await getHandler(path)
     if (!routeHandler) {

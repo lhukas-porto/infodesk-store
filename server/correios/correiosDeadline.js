@@ -1,14 +1,18 @@
 // Módulo de Consulta à API de Prazo dos Correios (Lote Nacional)
-import { CORREIOS_CONFIG, CORREIOS_SERVICES } from './config.js'
+import { CORREIOS_CONFIG, CORREIOS_SERVICES, getStoreCorreiosConfig } from './config.js'
 
 /**
  * Consulta a API de Prazo Nacional dos Correios em lote
  * @param {string} token - Bearer Token
  * @param {string} cepDestino - CEP de destino limpo (8 dígitos)
+ * @param {object} [options] - Parâmetros opcionais (cepOrigem, storeId)
  * @returns {Promise<Array<{ coProduto: string, nuRequisicao: string, prazoEntrega: number, dataMaxima: string, entregaDomiciliar: string }>>}
  */
-export async function fetchCorreiosDeadline(token, cepDestino) {
-  const cepOrigem = CORREIOS_CONFIG.cepOrigem
+export async function fetchCorreiosDeadline(token, cepDestino, options = {}) {
+  const storeId = options.storeId || 'default'
+  const storeCfg = getStoreCorreiosConfig(storeId)
+
+  const cepOrigem = (options.cepOrigem || storeCfg.cepOrigem || CORREIOS_CONFIG.cepOrigem || '').replace(/\D/g, '')
   const idLote = `LOTE-${Date.now()}`
 
   const parametrosPrazo = CORREIOS_SERVICES.map(svc => ({

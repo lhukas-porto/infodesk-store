@@ -123,13 +123,26 @@ export async function diagnoseCorreiosConnection(credentials = {}, storeId = 'de
   let sedexFound = false
 
   try {
+    let priceError = null
+    let deadlineError = null
+
     const [priceResults, deadlineResults] = await Promise.all([
-      fetchCorreiosPrice(token, testCepDestino, testPackage).catch(e => {
+      fetchCorreiosPrice(token, testCepDestino, testPackage, {
+        contrato,
+        dr: drIdentificada || dr,
+        cepOrigem,
+        storeId
+      }).catch(e => {
         console.warn('[Diagnóstico] Erro na API Preço:', e.message)
+        priceError = e.message
         return []
       }),
-      fetchCorreiosDeadline(token, testCepDestino).catch(e => {
+      fetchCorreiosDeadline(token, testCepDestino, {
+        cepOrigem,
+        storeId
+      }).catch(e => {
         console.warn('[Diagnóstico] Erro na API Prazo:', e.message)
+        deadlineError = e.message
         return []
       })
     ])
@@ -182,7 +195,7 @@ export async function diagnoseCorreiosConnection(credentials = {}, storeId = 'de
       results.push({
         item: 'API Preço funcionando',
         ok: false,
-        message: 'Nenhum preço retornado pela API Preço.'
+        message: priceError ? `Erro na API Preço: ${priceError}` : 'Nenhum preço retornado pela API Preço.'
       })
     }
 
@@ -198,7 +211,7 @@ export async function diagnoseCorreiosConnection(credentials = {}, storeId = 'de
       results.push({
         item: 'API Prazo funcionando',
         ok: false,
-        message: 'Nenhum prazo retornado pela API Prazo.'
+        message: deadlineError ? `Erro na API Prazo: ${deadlineError}` : 'Nenhum prazo retornado pela API Prazo.'
       })
     }
   } catch (err) {

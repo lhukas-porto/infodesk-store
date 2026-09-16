@@ -229,10 +229,7 @@ export default function CheckoutModal() {
           cidade: res.cidade || prev.cidade,
           estado: res.estado || prev.estado
         }))
-        setCepFeedback({
-          type: 'success',
-          message: `Endereço localizado: ${res.logradouro ? res.logradouro + ' — ' : ''}${res.bairro ? res.bairro + ', ' : ''}${res.cidade}/${res.estado}`
-        })
+        setCepFeedback(null)
 
         // Auto-calcular opções de frete oficial
         fetchFrete(clean)
@@ -842,9 +839,9 @@ export default function CheckoutModal() {
                   </div>
 
                   {/* Feedback da busca de CEP */}
-                  {cepFeedback && (
-                    <div className={`ck-field ck-field-full ck-cep-feedback ${cepFeedback.type}`}>
-                      {cepFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  {cepFeedback && cepFeedback.type === 'error' && (
+                    <div className="ck-field ck-field-full ck-cep-feedback error">
+                      <AlertCircle size={16} />
                       <span>{cepFeedback.message}</span>
                     </div>
                   )}
@@ -1244,7 +1241,7 @@ export default function CheckoutModal() {
                       Rastreamento dos Correios ({orderResult.freteType || 'PAC'})
                     </strong>
                     <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4, display: 'block' }}>
-                      Assim que o pacote for despachado nos Correios, você poderá acompanhar cada etapa pelo menu <strong>Rastrear Pedido</strong>.
+                      Assim que o pacote for despachado nos Correios, você poderá acompanhar cada etapa em <strong>Meus Pedidos &gt; Detalhes do Pedido</strong>.
                     </span>
                   </div>
                 </div>

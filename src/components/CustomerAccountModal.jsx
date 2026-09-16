@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import {
   X, User, Package, MapPin, Phone, Mail, FileText, CheckCircle2,
   Calendar, CreditCard, ExternalLink, Copy, AlertCircle, Save, Loader2,
-  Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Truck
+  Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Truck, ArrowLeft, ChevronRight, Clock
 } from 'lucide-react'
 
 import { useStore } from '../context/StoreContext'
@@ -35,6 +35,12 @@ export default function CustomerAccountModal() {
 
   // Abas quando autenticado: 'profile' | 'orders'
   const [activeTab, setActiveTab] = useState('profile')
+  const [selectedOrder, setSelectedOrder] = useState(null)
+
+  // Reseta pedido selecionado ao trocar de aba ou fechar modal
+  useEffect(() => {
+    setSelectedOrder(null)
+  }, [activeTab, showCustomerAccount])
 
   // Abas quando NÃO autenticado: 'login' | 'register'
   const [authTab, setAuthTab] = useState('login')
@@ -242,10 +248,7 @@ export default function CustomerAccountModal() {
             estado: res.estado || prev.estado
           }))
         }
-        setCepFeedback({
-          type: 'success',
-          message: `Endereço localizado: ${res.logradouro ? res.logradouro + ' — ' : ''}${res.bairro ? res.bairro + ', ' : ''}${res.cidade}/${res.estado}`
-        })
+        setCepFeedback(null)
       } else {
         setCepFeedback({
           type: 'error',
@@ -537,9 +540,9 @@ export default function CustomerAccountModal() {
                             </div>
                           </div>
 
-                          {cepFeedback && (
-                            <div className={`ck-field ck-field-full ck-cep-feedback ${cepFeedback.type}`}>
-                              {cepFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                          {cepFeedback && cepFeedback.type === 'error' && (
+                            <div className="ck-field ck-field-full ck-cep-feedback error">
+                              <AlertCircle size={16} />
                               <span>{cepFeedback.message}</span>
                             </div>
                           )}
@@ -753,9 +756,9 @@ export default function CustomerAccountModal() {
                             </div>
                           </div>
 
-                          {cepFeedback && (
-                            <div className={`ck-field ck-field-full ck-cep-feedback ${cepFeedback.type}`}>
-                              {cepFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                          {cepFeedback && cepFeedback.type === 'error' && (
+                            <div className="ck-field ck-field-full ck-cep-feedback error">
+                              <AlertCircle size={16} />
                               <span>{cepFeedback.message}</span>
                             </div>
                           )}
@@ -859,12 +862,20 @@ export default function CustomerAccountModal() {
               {activeTab === 'orders' && (
                 <div className="cust-orders">
                   {customerOrders.length === 0 ? (
-                    <div className="empty-state" style={{ padding: 'var(--space-8) 0' }}>
+                    <div className="empty-state" style={{ padding: 'var(--space-8) 0', textAlign: 'center' }}>
                       <Package size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
                       <p>Você ainda não possui nenhum pedido registrado nesta conta.</p>
                     </div>
-                  ) : (
+                  ) : !selectedOrder ? (
+                    /* LISTAGEM DE PEDIDOS DO CLIENTE */
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                      <div className="cust-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h4 style={{ margin: 0 }}>Histórico de Pedidos</h4>
+                        <span style={{ fontSize: '12px', color: 'var(--dark-500)' }}>
+                          {customerOrders.length} {customerOrders.length === 1 ? 'pedido' : 'pedidos'}
+                        </span>
+                      </div>
+
                       {customerOrders.map(order => (
                         <div key={order.id} className="cust-order-card">
                           <div className="cust-order-header">
@@ -879,62 +890,248 @@ export default function CustomerAccountModal() {
                             </span>
                           </div>
 
-                          {/* Items */}
-                          <div className="cust-order-items">
-                            {order.items?.map((item, idx) => (
-                              <div key={idx} className="cust-order-item-row">
-                                <img src={item.images?.[0] || 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=100'} alt={item.name} className="cust-item-thumb" />
-                                <div style={{ flex: 1 }}>
-                                  <strong>{item.name}</strong>
-                                  <span style={{ display: 'block', fontSize: '12px', color: 'var(--dark-500)' }}>
-                                    {item.qty}x R$ {item.price.toFixed(2).replace('.', ',')}
-                                  </span>
-                                </div>
-                                <strong>R$ {(item.price * item.qty).toFixed(2).replace('.', ',')}</strong>
-                              </div>
-                            ))}
+                          {/* Resumo visual dos Itens */}
+                          <div className="cust-order-summary-row">
+                            <div className="cust-order-thumbs-preview">
+                              {order.items?.slice(0, 4).map((item, idx) => (
+                                <img
+                                  key={idx}
+                                  src={item.images?.[0] || 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=100'}
+                                  alt={item.name}
+                                  className="cust-item-thumb"
+                                  title={`${item.qty}x ${item.name}`}
+                                />
+                              ))}
+                              {order.items?.length > 4 && (
+                                <span className="cust-more-items-badge">+{order.items.length - 4}</span>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, fontSize: '13px', color: 'var(--dark-600)' }}>
+                              <strong>{order.items?.reduce((acc, it) => acc + (it.qty || 1), 0)} {order.items?.reduce((acc, it) => acc + (it.qty || 1), 0) > 1 ? 'itens' : 'item'}</strong>
+                              <span style={{ display: 'block', fontSize: '12px', color: 'var(--dark-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '320px' }}>
+                                {order.items?.map(it => it.name).join(', ')}
+                              </span>
+                            </div>
                           </div>
 
-                          {/* Shipping Tracking */}
-                          {order.trackingCode && (
-                            <div className="cust-tracking-box">
-                              <span>📦 Rastreio dos Correios: <strong>{order.trackingCode}</strong></span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <button
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() => openTrackingModal(order.trackingCode)}
-                                  title="Rastrear envio em tempo real"
-                                >
-                                  <Truck size={13} /> Rastrear Encomenda
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  onClick={() => handleCopy(order.trackingCode)}
-                                >
-                                  <Copy size={12} /> Copiar
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Footer */}
+                          {/* Rodapé do Card com Ação de Ver Detalhes */}
                           <div className="cust-order-footer">
                             <div>
-                              <span style={{ fontSize: '12px', color: 'var(--dark-500)' }}>Forma de Pagamento: <strong>{order.paymentMethod?.toUpperCase()}</strong></span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              {order.boleto && (
-                                <button className="btn btn-outline btn-sm" onClick={() => handleDownloadBoleto(order)}>
-                                  <FileText size={14} /> Boleto
-                                </button>
-                              )}
-                              <div className="cust-order-total">
+                              <span style={{ fontSize: '12px', color: 'var(--dark-500)', display: 'block' }}>
+                                Pagamento: <strong>{order.paymentMethod?.toUpperCase()}</strong>
+                              </span>
+                              <div className="cust-order-total" style={{ marginTop: 2 }}>
                                 Total: <strong>R$ {(order.total || 0).toFixed(2).replace('.', ',')}</strong>
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => setSelectedOrder(order)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontWeight: 600,
+                                padding: '6px 14px'
+                              }}
+                            >
+                              Ver Detalhes do Pedido <ChevronRight size={14} />
+                            </button>
                           </div>
                         </div>
                       ))}
+                    </div>
+                  ) : (
+                    /* VISUALIZAÇÃO DETALHADA DO PEDIDO SELECIONADO */
+                    <div className="cust-order-details-view">
+                      {/* Botão de Retorno */}
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setSelectedOrder(null)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 0', marginBottom: 14, color: 'var(--dark-600)', cursor: 'pointer' }}
+                      >
+                        <ArrowLeft size={16} /> Voltar para Meus Pedidos
+                      </button>
+
+                      {/* Cabeçalho dos Detalhes */}
+                      <div className="cust-order-detail-header">
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                            <h4 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>Pedido #{selectedOrder.id}</h4>
+                            <span className={`badge ${selectedOrder.status === 'Pago' || selectedOrder.status === 'Entregue' ? 'badge-lime' : selectedOrder.status === 'Enviado' ? 'badge-dark' : 'badge-red'}`}>
+                              {selectedOrder.status}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '12px', color: 'var(--dark-500)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Calendar size={13} /> Realizado em {new Date(selectedOrder.date).toLocaleDateString('pt-BR')} às {new Date(selectedOrder.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* SEÇÃO CONDICIONAL DE RASTREIO: SOMENTE SE O PEDIDO JÁ TIVER SIDO ENVIADO */}
+                      {(() => {
+                        const isShipped = selectedOrder.status === 'Enviado' ||
+                                          selectedOrder.status === 'Entregue' ||
+                                          Boolean(selectedOrder.trackingCode && selectedOrder.trackingCode.trim().length > 0);
+
+                        if (isShipped) {
+                          return (
+                            <div className="cust-detail-tracking-card shipped">
+                              <div className="cust-detail-tracking-info">
+                                <div className="tracking-truck-icon">
+                                  <Truck size={22} />
+                                </div>
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <strong style={{ fontSize: '14px', color: '#0369a1' }}>Pedido Enviado / Em Transporte</strong>
+                                    <span className="badge badge-lime" style={{ fontSize: '10px' }}>Despachado</span>
+                                  </div>
+                                  <span style={{ fontSize: '12px', color: '#334155', display: 'block', marginTop: 2 }}>
+                                    Código de Rastreio dos Correios: <strong style={{ fontFamily: 'monospace', fontSize: '13px', color: '#0284c7' }}>{selectedOrder.trackingCode || 'Disponível no sistema'}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="cust-detail-tracking-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => openTrackingModal(selectedOrder.trackingCode || '')}
+                                  style={{
+                                    background: '#0284c7',
+                                    borderColor: '#0284c7',
+                                    color: '#ffffff',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    fontWeight: 600,
+                                    boxShadow: '0 2px 6px rgba(2, 132, 199, 0.3)'
+                                  }}
+                                  title="Acompanhar rastreio oficial em tempo real"
+                                >
+                                  <Truck size={14} /> Rastrear Pedido
+                                </button>
+                                {selectedOrder.trackingCode && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline btn-sm"
+                                    onClick={() => handleCopy(selectedOrder.trackingCode)}
+                                    title="Copiar código de rastreamento"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                  >
+                                    <Copy size={13} /> Copiar Código
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        } else {
+                          return (
+                            <div className="cust-detail-tracking-card pending">
+                              <Clock size={18} style={{ color: '#d97706', flexShrink: 0 }} />
+                              <div style={{ fontSize: '12.5px', color: '#92400e', lineHeight: 1.4 }}>
+                                <strong>Aguardando Despacho:</strong> Seu pedido está sendo separado e preparado com todo cuidado. O botão de <strong>Rastrear Pedido</strong> e o código de rastreamento dos Correios serão disponibilizados aqui assim que o pacote for enviado.
+                              </div>
+                            </div>
+                          )
+                        }
+                      })()}
+
+                      {/* Lista Completa dos Itens */}
+                      <div className="cust-detail-box">
+                        <h5 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark-700)', marginBottom: 12 }}>
+                          Itens do Pedido ({selectedOrder.items?.length || 0})
+                        </h5>
+                        <div className="cust-order-items">
+                          {selectedOrder.items?.map((item, idx) => (
+                            <div key={idx} className="cust-order-item-row" style={{ padding: '8px 0', borderBottom: idx !== (selectedOrder.items.length - 1) ? '1px solid var(--dark-100)' : 'none' }}>
+                              <img src={item.images?.[0] || 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=100'} alt={item.name} className="cust-item-thumb" style={{ width: 50, height: 50 }} />
+                              <div style={{ flex: 1 }}>
+                                <strong style={{ fontSize: '13px', color: 'var(--dark-900)' }}>{item.name}</strong>
+                                <span style={{ display: 'block', fontSize: '12px', color: 'var(--dark-500)' }}>
+                                  {item.qty}x de R$ {item.price.toFixed(2).replace('.', ',')}
+                                </span>
+                              </div>
+                              <strong style={{ fontSize: '14px', color: 'var(--dark-900)' }}>R$ {(item.price * item.qty).toFixed(2).replace('.', ',')}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Grade de Informações: Endereço & Valores */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+                        {/* Endereço de Entrega */}
+                        <div className="cust-detail-box">
+                          <h5 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark-700)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <MapPin size={14} color="#0284c7" /> Endereço de Entrega
+                          </h5>
+                          <p style={{ margin: 0, fontSize: '12.5px', color: 'var(--dark-700)', lineHeight: 1.5 }}>
+                            {selectedOrder.cliente?.enderecoCompleto || (
+                              selectedOrder.cliente?.endereco ? (
+                                <>
+                                  {selectedOrder.cliente.endereco}, {selectedOrder.cliente.numero || 'S/N'}
+                                  {selectedOrder.cliente.complemento && ` - ${selectedOrder.cliente.complemento}`}<br />
+                                  {selectedOrder.cliente.bairro && `${selectedOrder.cliente.bairro} - `}
+                                  {selectedOrder.cliente.cidade}/{selectedOrder.cliente.estado}<br />
+                                  CEP: {selectedOrder.cliente.cep}
+                                </>
+                              ) : 'Endereço cadastrado no perfil do cliente'
+                            )}
+                          </p>
+                          {selectedOrder.freteType && (
+                            <span style={{ display: 'inline-block', marginTop: 8, fontSize: '11px', background: 'var(--dark-100)', padding: '2px 8px', borderRadius: 4, color: 'var(--dark-600)' }}>
+                              Envio via Correios ({selectedOrder.freteType})
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Resumo Financeiro */}
+                        <div className="cust-detail-box">
+                          <h5 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark-700)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CreditCard size={14} color="#0284c7" /> Pagamento e Valores
+                          </h5>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '12px', color: 'var(--dark-600)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Forma de Pagamento:</span>
+                              <strong>{selectedOrder.paymentMethod?.toUpperCase()}</strong>
+                            </div>
+                            {selectedOrder.subtotal !== undefined && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Subtotal:</span>
+                                <span>R$ {selectedOrder.subtotal.toFixed(2).replace('.', ',')}</span>
+                              </div>
+                            )}
+                            {selectedOrder.frete !== undefined && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Frete Correios:</span>
+                                <span>R$ {selectedOrder.frete.toFixed(2).replace('.', ',')}</span>
+                              </div>
+                            )}
+                            {selectedOrder.pixDiscount > 0 && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#16a34a' }}>
+                                <span>Desconto Pix (3%):</span>
+                                <span>- R$ {selectedOrder.pixDiscount.toFixed(2).replace('.', ',')}</span>
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--dark-200)', paddingTop: 6, marginTop: 4, fontSize: '14px', color: 'var(--dark-900)' }}>
+                              <strong>Total do Pedido:</strong>
+                              <strong style={{ color: 'var(--lime-dark)' }}>R$ {(selectedOrder.total || 0).toFixed(2).replace('.', ',')}</strong>
+                            </div>
+                          </div>
+
+                          {selectedOrder.boleto && (
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => handleDownloadBoleto(selectedOrder)}
+                              style={{ width: '100%', marginTop: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                            >
+                              <FileText size={14} /> Imprimir / Baixar Boleto
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1140,6 +1337,85 @@ export default function CustomerAccountModal() {
           .cust-order-total {
             font-size: var(--text-base);
             color: var(--lime-dark);
+          }
+          .cust-order-summary-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+          }
+          .cust-order-thumbs-preview {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
+          .cust-more-items-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--dark-100);
+            color: var(--dark-600);
+            font-size: 11px;
+            font-weight: 700;
+          }
+          .cust-order-details-view {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+          }
+          .cust-order-detail-header {
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--dark-100);
+          }
+          .cust-detail-tracking-card {
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+          .cust-detail-tracking-card.shipped {
+            background: rgba(2, 132, 199, 0.08);
+            border: 1px solid rgba(2, 132, 199, 0.25);
+          }
+          .cust-detail-tracking-card.pending {
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
+          .cust-detail-tracking-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          .tracking-truck-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: #e0f2fe;
+            color: #0284c7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+          .cust-detail-tracking-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .cust-detail-box {
+            background: var(--dark-50);
+            border: 1px solid var(--dark-200);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
           }
         `}</style>
       </div>

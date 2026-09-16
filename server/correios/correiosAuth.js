@@ -1,27 +1,30 @@
 // Módulo de Autenticação com a API Oficial dos Correios (Token com Contrato)
 // Gerencia cache em memória, renovação preventiva e invalidação segura sem expor credenciais
 
-import { CORREIOS_CONFIG } from './config.js'
+import { CORREIOS_CONFIG, getStoreCorreiosConfig } from './config.js'
 
-let cachedTokenData = null // { token, expiresAt: timestamp }
+const tokenCacheByStore = new Map() // storeId -> { token, expiresAt: timestamp }
 
 /**
  * Obtém o Bearer Token dos Correios com cache e renovação automática
  * @param {boolean} forceRefresh - Força geração de novo token descartando o cache
+ * @param {string} storeId - Identificador da loja
  * @returns {Promise<string>} Bearer token válido
  */
-export async function getCorreiosToken(forceRefresh = false) {
+export async function getCorreiosToken(forceRefresh = false, storeId = 'default') {
   const now = Date.now()
+  const cached = tokenCacheByStore.get(storeId)
 
   // Se houver token válido e com margem de segurança de pelo menos 5 minutos, reutiliza
-  if (!forceRefresh && cachedTokenData && cachedTokenData.expiresAt > now + (5 * 60 * 1000)) {
-    return cachedTokenData.token
+  if (!forceRefresh && cached && cached.expiresAt > now + (5 * 60 * 1000)) {
+    return cached.token
   }
 
-  const usuario = CORREIOS_CONFIG.usuario
-  const codigoAcesso = CORREIOS_CONFIG.codigoAcesso
-  const contrato = CORREIOS_CONFIG.contrato
-  const dr = CORREIOS_CONFIG.dr
+  const storeCfg = getStoreCorreiosConfig(storeId)
+  const usuario = storeCfg.usuario || CORREIOS_CONFIG.usuario
+  const codigoAcesso = storeCfg.codigoAcesso || CORREIOS_CONFIG.codigoAcesso
+  const contrato = storeCfg.contrato || CORREIOS_CONFIG.contrato
+  const dr = storeCfg.dr || CORREIOS_CONFIG.dr
 
   if (!usuario || !codigoAcesso || !contrato) {
     throw new Error('Credenciais dos Correios incompletas no ambiente (CORREIOS_USUARIO, CORREIOS_CODIGO_ACESSO, CORREIOS_CONTRATO).')
@@ -74,10 +77,10 @@ export async function getCorreiosToken(forceRefresh = false) {
       expiresAt = now + (parseInt(data.expires_in, 10) * 1000)
     }
 
-    cachedTokenData = {
+    tokenCacheByStore.set(storeId, {
       token,
       expiresAt
-    }
+    })
 
     return token
   } catch (err) {
@@ -93,6 +96,6 @@ export async function getCorreiosToken(forceRefresh = false) {
 /**
  * Descarta o token armazenado em memória (usado após erro 401)
  */
-export function invalidateCorreiosToken() {
-  cachedTokenData = null
+export function invalidateCorreiosToken(storeId = 'default') {
+  tokenCacheByStore.delete(storeId)
 }

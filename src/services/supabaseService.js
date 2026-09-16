@@ -206,6 +206,24 @@ export async function deleteProductFromDb(productId, productEan = null, productN
   }
 }
 
+export async function clearAllProductsFromDb() {
+  if (!isSupabaseConfigured || !supabase) return false
+  try {
+    const { data: all, error: fetchErr } = await supabase.from('products').select('id')
+    if (fetchErr) return false
+    if (all && all.length > 0) {
+      const ids = all.map(p => p.id)
+      for (let i = 0; i < ids.length; i += 20) {
+        await supabase.from('products').delete().in('id', ids.slice(i, i + 20))
+      }
+    }
+    return true
+  } catch (err) {
+    console.warn('Supabase: Falha ao zerar produtos:', err)
+    return false
+  }
+}
+
 export async function seedProductsToDb(initialList) {
   if (!isSupabaseConfigured || !supabase || !initialList?.length) return []
   try {

@@ -37,7 +37,6 @@ export default function Header() {
     globalCep,
     globalAddress,
     setShowCepModal,
-    openTrackingModal,
     companyData,
   } = useStore()
 
@@ -316,7 +315,7 @@ export default function Header() {
             <span className="topbar-sep hide-mobile">•</span>
             <span className="topbar-item hide-mobile">
               <Truck size={13} className="topbar-icon" />
-              Envio em até 24h via Correios
+              Envio em até 24h
             </span>
             <span className="topbar-sep hide-mobile">•</span>
             <span className="topbar-item hide-mobile">
@@ -326,33 +325,8 @@ export default function Header() {
             <span className="topbar-sep hide-mobile">•</span>
             <span className="topbar-item">
               <ShieldCheck size={13} className="topbar-icon" />
-              Garantia Oficial com NF
+              Produtos com Procedência e Garantia
             </span>
-          </div>
-          <div className="topbar-right hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <button
-              type="button"
-              className="topbar-track-btn"
-              onClick={() => openTrackingModal()}
-              style={{
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.35)',
-                color: '#38bdf8',
-                borderRadius: '6px',
-                padding: '3px 10px',
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.2s'
-              }}
-              title="Rastrear Encomenda dos Correios"
-            >
-              <Truck size={13} /> Rastrear Pedido
-            </button>
-            <span>Suporte Especializado: <strong>{companyData?.emailAtendimento || companyData?.emailPrincipal || 'contato@infodesk.net.br'}</strong></span>
           </div>
         </div>
       </div>
@@ -563,13 +537,14 @@ export default function Header() {
         .header-topbar-inner {
           display: flex;
           align-items: center;
-          justify-content: space-between;
+          justify-content: center;
         }
         .topbar-items {
           display: flex;
           align-items: center;
           gap: 12px;
           flex-wrap: wrap;
+          justify-content: center;
         }
         .topbar-item {
           display: inline-flex;
@@ -589,13 +564,6 @@ export default function Header() {
         .topbar-sep {
           color: #475569;
           font-size: 10px;
-        }
-        .topbar-right {
-          color: #94a3b8;
-          font-size: 11px;
-        }
-        .topbar-right strong {
-          color: #e2e8f0;
         }
         .header-inner {
           display: flex;
