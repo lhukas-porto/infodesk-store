@@ -42,7 +42,7 @@ export default function CustomerAccountModal() {
     setSelectedOrder(null)
   }, [activeTab, showCustomerAccount])
 
-  // Abas quando NÃO autenticado: 'login' | 'register'
+  // Abas quando NÃO autenticado: 'login' | 'register' | 'forgot'
   const [authTab, setAuthTab] = useState('login')
 
   // Estado do formulário de Login
@@ -51,6 +51,13 @@ export default function CustomerAccountModal() {
   const [showPassword, setShowPassword] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Estado de Recuperação de Senha (Esqueci a Senha)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [isSendingForgot, setIsSendingForgot] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotError, setForgotError] = useState('')
+  const [forgotSuccessMsg, setForgotSuccessMsg] = useState('')
 
   // Estado do formulário de Cadastro
   const [regData, setRegData] = useState({
@@ -145,6 +152,36 @@ export default function CustomerAccountModal() {
     } else {
       setLoginId('')
       setLoginPassword('')
+    }
+  }
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault()
+    setForgotError('')
+    if (!forgotEmail.trim()) {
+      setForgotError('Informe o seu e-mail cadastrado.')
+      return
+    }
+
+    setIsSendingForgot(true)
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim(), type: 'customer' })
+      })
+      const data = await res.json()
+      setIsSendingForgot(false)
+
+      if (res.ok && data.success) {
+        setForgotSent(true)
+        setForgotSuccessMsg(data.message || 'Link de recuperação enviado com sucesso!')
+      } else {
+        setForgotError(data.error || 'Não foi possível solicitar a recuperação de senha.')
+      }
+    } catch (err) {
+      setIsSendingForgot(false)
+      setForgotError('Erro de conexão ao solicitar recuperação. Tente novamente.')
     }
   }
 
@@ -304,14 +341,18 @@ export default function CustomerAccountModal() {
                 ? `Olá, ${(customerProfile?.nome || formData?.nome || 'Cliente').split(' ')[0]}`
                 : authTab === 'login'
                   ? 'Entrar na Minha Conta'
-                  : 'Criar Nova Conta de Cliente'}
+                  : authTab === 'forgot'
+                    ? 'Recuperar Senha de Acesso'
+                    : 'Criar Nova Conta de Cliente'}
             </h2>
             <span className="cust-subtitle">
               {isCustomerLoggedIn
                 ? `${customerProfile?.email || formData?.email || ''} • Gerencie seus dados e acompanhe seus pedidos`
                 : authTab === 'login'
                   ? 'Se você já tem cadastro, faça login com seu e-mail/CPF e senha'
-                  : `Preencha o formulário abaixo para se cadastrar na ${publicName}`}
+                  : authTab === 'forgot'
+                    ? 'Informe seu e-mail cadastrado para receber o link seguro de redefinição'
+                    : `Preencha o formulário abaixo para se cadastrar na ${publicName}`}
             </span>
           </div>
         </div>
@@ -369,7 +410,31 @@ export default function CustomerAccountModal() {
                       </div>
 
                       <div className="ck-field">
-                        <label>Senha de Acesso *</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <label style={{ margin: 0 }}>Senha de Acesso *</label>
+                          <button
+                            type="button"
+                            className="cust-link-btn"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--lime-dark)',
+                              fontSize: 'var(--text-xs)',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                            onClick={() => {
+                              setAuthTab('forgot')
+                              setLoginError('')
+                              setForgotError('')
+                              setForgotSent(false)
+                              if (loginId.includes('@')) setForgotEmail(loginId)
+                            }}
+                          >
+                            Esqueceu a senha?
+                          </button>
+                        </div>
                         <div className="input-wrap">
                           <Lock size={18} className="input-icon-left" />
                           <input
@@ -422,6 +487,133 @@ export default function CustomerAccountModal() {
                         Cadastre-se gratuitamente
                       </button>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA DE ESQUECI A SENHA */}
+              {authTab === 'forgot' && (
+                <div className="cust-auth-container">
+                  <div className="cust-auth-card">
+                    {forgotSent ? (
+                      <div className="cust-forgot-success" style={{ textAlign: 'center', padding: 'var(--space-6) var(--space-4)' }}>
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 56,
+                          height: 56,
+                          borderRadius: '50%',
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          marginBottom: 'var(--space-3)'
+                        }}>
+                          <CheckCircle2 size={32} color="#10b981" />
+                        </div>
+                        <h3 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 8, color: 'var(--dark-900)' }}>
+                          Link de Recuperação Enviado!
+                        </h3>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--dark-600)', lineHeight: 1.5, marginBottom: 'var(--space-4)' }}>
+                          Enviamos o link de redefinição para <strong>{forgotEmail}</strong>. Verifique sua caixa de entrada e spam.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-lg"
+                            style={{ width: '100%' }}
+                            onClick={() => {
+                              setAuthTab('login')
+                              setForgotSent(false)
+                            }}
+                          >
+                            Voltar para o Login
+                          </button>
+                          <button
+                            type="button"
+                            className="cust-link-btn"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--dark-500)',
+                              fontSize: 'var(--text-xs)',
+                              cursor: 'pointer',
+                              padding: 6
+                            }}
+                            onClick={() => setForgotSent(false)}
+                          >
+                            Tentar outro e-mail
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleForgotSubmit} className="cust-form">
+                        {forgotError && (
+                          <div className="cust-alert cust-alert-error" style={{ marginBottom: 'var(--space-3)' }}>
+                            <AlertCircle size={18} />
+                            <span>{forgotError}</span>
+                          </div>
+                        )}
+
+                        <div className="ck-field">
+                          <label>E-mail Cadastrado *</label>
+                          <div className="input-wrap">
+                            <Mail size={18} className="input-icon-left" />
+                            <input
+                              className="input-field has-icon-left"
+                              type="email"
+                              value={forgotEmail}
+                              onChange={e => { setForgotEmail(e.target.value); setForgotError('') }}
+                              placeholder="seuemail@exemplo.com"
+                              required
+                              autoFocus
+                              disabled={isSendingForgot}
+                            />
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'var(--dark-400)', marginTop: 4, display: 'block' }}>
+                            Enviaremos um link de uso único para você redefinir sua senha com segurança.
+                          </span>
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-lg"
+                          style={{ width: '100%', marginTop: 'var(--space-2)' }}
+                          disabled={isSendingForgot}
+                        >
+                          {isSendingForgot ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" /> Enviando link por e-mail...
+                            </>
+                          ) : (
+                            <>
+                              <Mail size={18} /> Enviar Link de Recuperação
+                            </>
+                          )}
+                        </button>
+
+                        <div className="cust-auth-footer" style={{ marginTop: 'var(--space-4)' }}>
+                          <button
+                            type="button"
+                            className="cust-link-btn"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--dark-600)',
+                              fontSize: 'var(--text-sm)',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6
+                            }}
+                            onClick={() => {
+                              setAuthTab('login')
+                              setForgotError('')
+                            }}
+                          >
+                            ← Voltar para o Login
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               )}

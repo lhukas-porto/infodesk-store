@@ -49,6 +49,9 @@ async function getHandler(path) {
   if (path.startsWith('/api/admin/auth')) {
     return (await import('../lib/api/admin/auth.js')).default
   }
+  if (path.startsWith('/api/auth/')) {
+    return (await import('../lib/api/auth/password-reset.js')).default
+  }
   if (path.startsWith('/api/company/config')) {
     return (await import('../lib/api/company/config.js')).default
   }

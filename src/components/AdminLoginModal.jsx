@@ -19,7 +19,14 @@ export default function AdminLoginModal() {
   const [isLoading, setIsLoading] = useState(false)
   const [failedAttempts, setFailedAttempts] = useState(0)
   const [lockoutTimer, setLockoutTimer] = useState(0)
-  const [showCredsHint, setShowCredsHint] = useState(false)
+  
+  // Estado para alternar entre Login e Esqueci a Senha
+  const [viewMode, setViewMode] = useState('login') // 'login' | 'forgot'
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [isSendingForgot, setIsSendingForgot] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotSuccessMsg, setForgotSuccessMsg] = useState('')
+  const [forgotError, setForgotError] = useState('')
 
   // Countdown timer for lockout protection
   useEffect(() => {
@@ -42,7 +49,10 @@ export default function AdminLoginModal() {
   useEffect(() => {
     if (showAdminLogin) {
       setError('')
+      setForgotError('')
+      setForgotSent(false)
       if (!email) setEmail(adminConfig.email)
+      if (!forgotEmail) setForgotEmail(adminConfig.email)
     }
   }, [showAdminLogin, adminConfig.email])
 
@@ -103,11 +113,34 @@ export default function AdminLoginModal() {
     }
   }
 
-  const handleFillDemo = () => {
-    setEmail(adminConfig.email)
-    setPassword(adminConfig.password)
-    setError('')
-    setShowCredsHint(false)
+  const handleForgotSubmit = async (e) => {
+    e?.preventDefault()
+    setForgotError('')
+    if (!forgotEmail.trim()) {
+      setForgotError('Informe o e-mail de administrador para recuperação.')
+      return
+    }
+
+    setIsSendingForgot(true)
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim(), type: 'admin' })
+      })
+      const data = await res.json()
+      setIsSendingForgot(false)
+
+      if (res.ok && data.success) {
+        setForgotSent(true)
+        setForgotSuccessMsg(data.message || 'Link de recuperação enviado com sucesso!')
+      } else {
+        setForgotError(data.error || 'Não foi possível enviar o link de recuperação.')
+      }
+    } catch (err) {
+      setIsSendingForgot(false)
+      setForgotError('Falha ao conectar com o serviço de recuperação. Tente novamente.')
+    }
   }
 
   return (
@@ -142,142 +175,229 @@ export default function AdminLoginModal() {
             <Shield size={14} />
             <span>Acesso Restrito · Painel de Gestão</span>
           </div>
-          <h2>Área do Administrador</h2>
-          <p>Autentique-se com suas credenciais seguras para gerenciar o catálogo, estoque e pedidos.</p>
+          <h2>{viewMode === 'login' ? 'Área do Administrador' : 'Recuperar Senha de Acesso'}</h2>
+          <p>
+            {viewMode === 'login'
+              ? 'Autentique-se com suas credenciais seguras para gerenciar o catálogo, estoque e pedidos.'
+              : 'Informe o e-mail de administrador cadastrado. Enviaremos um link de uso único para você redefinir sua senha com segurança.'}
+          </p>
         </div>
 
-        {/* Form */}
-        <form className="adm-login-form" onSubmit={handleSubmit}>
-          {/* Email / Username */}
-          <div className="adm-form-group">
-            <label htmlFor="admin-email">E-mail ou Usuário</label>
-            <div className="input-wrap">
-              <Mail size={18} className="input-icon-left" />
-              <input
-                id="admin-email"
-                type="text"
-                className="input-field has-icon-left"
-                placeholder="ex: admin@suaempresa.com.br"
-                value={email}
-                onChange={e => { setEmail(e.target.value); setError('') }}
-                disabled={lockoutTimer > 0 || isLoading}
-                autoFocus
-              />
+        {/* VIEW 1: LOGIN */}
+        {viewMode === 'login' ? (
+          <form className="adm-login-form" onSubmit={handleSubmit}>
+            {/* Email / Username */}
+            <div className="adm-form-group">
+              <label htmlFor="admin-email">E-mail ou Usuário</label>
+              <div className="input-wrap">
+                <Mail size={18} className="input-icon-left" />
+                <input
+                  id="admin-email"
+                  type="text"
+                  className="input-field has-icon-left"
+                  placeholder="ex: admin@suaempresa.com.br"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setError('') }}
+                  disabled={lockoutTimer > 0 || isLoading}
+                  autoFocus
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Password */}
-          <div className="adm-form-group">
-            <div className="adm-label-row">
-              <label htmlFor="admin-password">Senha de Acesso</label>
-              <button
-                type="button"
-                className="adm-forgot-btn"
-                onClick={() => setShowCredsHint(!showCredsHint)}
-              >
-                Esqueceu ou 1º Acesso?
-              </button>
+            {/* Password */}
+            <div className="adm-form-group">
+              <div className="adm-label-row">
+                <label htmlFor="admin-password">Senha de Acesso</label>
+                <button
+                  type="button"
+                  className="adm-forgot-btn"
+                  onClick={() => {
+                    setViewMode('forgot')
+                    setForgotSent(false)
+                    setForgotError('')
+                    if (!forgotEmail && email) setForgotEmail(email)
+                  }}
+                >
+                  Esqueceu a senha?
+                </button>
+              </div>
+              <div className="input-wrap">
+                <Lock size={18} className="input-icon-left" />
+                <input
+                  id="admin-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="input-field has-both-icons"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setError('') }}
+                  disabled={lockoutTimer > 0 || isLoading}
+                />
+                <button
+                  type="button"
+                  className="input-btn-right"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                  aria-label="Alternar visualização da senha"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
-            <div className="input-wrap">
-              <Lock size={18} className="input-icon-left" />
-              <input
-                id="admin-password"
-                type={showPassword ? 'text' : 'password'}
-                className="input-field has-both-icons"
-                placeholder="••••••••••••"
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError('') }}
-                disabled={lockoutTimer > 0 || isLoading}
-              />
-              <button
-                type="button"
-                className="input-btn-right"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-                aria-label="Alternar visualização da senha"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+
+            {/* Remember me option */}
+            <div className="adm-options-row">
+              <label className="adm-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                />
+                <span>Manter conectado neste dispositivo</span>
+              </label>
             </div>
-          </div>
 
-          {/* Remember me option */}
-          <div className="adm-options-row">
-            <label className="adm-checkbox-label">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-              />
-              <span>Manter conectado neste dispositivo</span>
-            </label>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="adm-alert-error">
-              <AlertCircle size={18} />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Lockout alert */}
-          {lockoutTimer > 0 && (
-            <div className="adm-alert-lockout">
-              <Lock size={18} />
-              <span>Aguarde {lockoutTimer}s para tentar novamente.</span>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="btn btn-primary btn-lg adm-submit-btn"
-            disabled={isLoading || lockoutTimer > 0}
-          >
-            {isLoading ? (
-              <>
-                <div className="spinner" style={{ width: 18, height: 18 }} />
-                <span>Autenticando...</span>
-              </>
-            ) : (
-              <>
-                <KeyRound size={18} />
-                <span>Entrar no Painel</span>
-                <ArrowRight size={18} />
-              </>
+            {/* Error message */}
+            {error && (
+              <div className="adm-alert-error">
+                <AlertCircle size={18} />
+                <span>{error}</span>
+              </div>
             )}
-          </button>
-        </form>
 
-        {/* Credentials / First Access Hint Box */}
-        {showCredsHint && (
-          <div className="adm-creds-box">
-            <div className="adm-creds-header">
-              <Info size={16} />
-              <strong>Credenciais Padrão do Sistema</strong>
-            </div>
-            <div className="adm-creds-body">
-              <div className="adm-cred-line">
-                <span>Usuário:</span>
-                <code>{adminConfig.email}</code>
+            {/* Lockout alert */}
+            {lockoutTimer > 0 && (
+              <div className="adm-alert-lockout">
+                <Lock size={18} />
+                <span>Aguarde {lockoutTimer}s para tentar novamente.</span>
               </div>
-              <div className="adm-cred-line">
-                <span>Senha Inicial:</span>
-                <code>{adminConfig.password}</code>
-              </div>
-            </div>
+            )}
+
+            {/* Submit Button */}
             <button
-              type="button"
-              className="btn btn-outline btn-sm adm-creds-autofill"
-              onClick={handleFillDemo}
+              type="submit"
+              className="btn btn-primary btn-lg adm-submit-btn"
+              disabled={isLoading || lockoutTimer > 0}
             >
-              <CheckCircle2 size={14} />
-              Preencher Automaticamente
+              {isLoading ? (
+                <>
+                  <div className="spinner" style={{ width: 18, height: 18 }} />
+                  <span>Autenticando...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound size={18} />
+                  <span>Entrar no Painel</span>
+                  <ArrowRight size={18} />
+                </>
+              )}
             </button>
-            <p className="adm-creds-note">
-              * Você pode alterar esta senha a qualquer momento dentro do painel.
-            </p>
+          </form>
+        ) : (
+          /* VIEW 2: FORGOT PASSWORD */
+          <div className="adm-forgot-view">
+            {forgotSent ? (
+              <div className="adm-forgot-success-box">
+                <div className="adm-forgot-icon-wrap">
+                  <CheckCircle2 size={36} color="var(--primary-color, #10b981)" />
+                </div>
+                <h3>E-mail de Recuperação Enviado!</h3>
+                <p>
+                  Enviamos o link de redefinição para <strong>{forgotEmail}</strong>.
+                  Verifique sua caixa de entrada e spam nos próximos minutos.
+                </p>
+                <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-lg"
+                    style={{ width: '100%' }}
+                    onClick={() => {
+                      setViewMode('login')
+                      setForgotSent(false)
+                    }}
+                  >
+                    Voltar para o Login
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--dark-500)' }}
+                    onClick={() => setForgotSent(false)}
+                  >
+                    Tentar outro e-mail
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotSubmit} className="adm-login-form">
+                {forgotError && (
+                  <div className="adm-alert-error">
+                    <AlertCircle size={18} />
+                    <span>{forgotError}</span>
+                  </div>
+                )}
+
+                <div className="adm-form-group">
+                  <label htmlFor="admin-forgot-email">E-mail Cadastrado do Administrador</label>
+                  <div className="input-wrap">
+                    <Mail size={18} className="input-icon-left" />
+                    <input
+                      id="admin-forgot-email"
+                      type="email"
+                      className="input-field has-icon-left"
+                      placeholder="admin@suaempresa.com.br"
+                      value={forgotEmail}
+                      onChange={e => { setForgotEmail(e.target.value); setForgotError('') }}
+                      disabled={isSendingForgot}
+                      autoFocus
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-lg adm-submit-btn"
+                  disabled={isSendingForgot}
+                  style={{ marginTop: 'var(--space-2)' }}
+                >
+                  {isSendingForgot ? (
+                    <>
+                      <div className="spinner" style={{ width: 18, height: 18 }} />
+                      <span>Enviando link por e-mail...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={18} />
+                      <span>Enviar Link de Recuperação</span>
+                      <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: 'var(--space-3)' }}>
+                  <button
+                    type="button"
+                    className="cust-link-btn"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--dark-600)',
+                      fontSize: 'var(--text-sm)',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                    onClick={() => {
+                      setViewMode('login')
+                      setForgotError('')
+                    }}
+                  >
+                    ← Voltar para o Login
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
 
@@ -454,54 +574,37 @@ export default function AdminLoginModal() {
             width: 100%;
             margin-top: var(--space-2);
           }
-          .adm-creds-box {
-            margin-top: var(--space-4);
-            padding: var(--space-4);
-            background: var(--dark-50);
-            border: 1px dashed var(--dark-300);
-            border-radius: var(--radius-xl);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+          .adm-forgot-view {
             animation: fadeIn 0.2s ease-out;
           }
-          .adm-creds-header {
-            display: flex;
+          .adm-forgot-success-box {
+            text-align: center;
+            padding: var(--space-6) var(--space-4);
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: var(--radius-xl);
+            animation: fadeIn 0.3s ease-out;
+          }
+          .adm-forgot-icon-wrap {
+            display: inline-flex;
             align-items: center;
-            gap: 6px;
-            font-size: var(--text-xs);
-            color: var(--dark-700);
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: var(--radius-full);
+            background: rgba(16, 185, 129, 0.15);
+            margin-bottom: var(--space-3);
           }
-          .adm-creds-body {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-          }
-          .adm-cred-line {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: var(--text-xs);
-            color: var(--dark-600);
-          }
-          .adm-cred-line code {
-            background: var(--white);
-            padding: 2px 6px;
-            border-radius: 4px;
-            border: 1px solid var(--dark-200);
+          .adm-forgot-success-box h3 {
+            font-size: var(--text-lg);
             font-weight: 700;
             color: var(--dark-900);
+            margin-bottom: var(--space-2);
           }
-          .adm-creds-autofill {
-            width: 100%;
-            margin-top: 4px;
-            border-color: var(--lime);
-            color: var(--lime-dark);
-          }
-          .adm-creds-note {
-            font-size: 10px;
-            color: var(--dark-400);
-            text-align: center;
+          .adm-forgot-success-box p {
+            font-size: var(--text-sm);
+            color: var(--dark-600);
+            line-height: 1.5;
           }
           .adm-login-footer {
             margin-top: var(--space-6);

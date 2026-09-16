@@ -21,6 +21,7 @@ const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'))
 const BarcodeScannerModal = React.lazy(() => import('./components/BarcodeScannerModal'))
 const TrackingModal = React.lazy(() => import('./components/TrackingModal'))
 const PaymentReturnModal = React.lazy(() => import('./components/PaymentReturnModal'))
+const PasswordResetModal = React.lazy(() => import('./components/PasswordResetModal'))
 import { resolveCurrentTenant } from './services/tenantResolver'
 import { getMarketingSettings } from './services/marketingService'
 import { applyStoreSeo } from './services/seoManager'
@@ -241,6 +242,7 @@ export default function App() {
         <AdminDashboard />
         <BarcodeScannerModal />
         <TrackingModal />
+        <PasswordResetModal />
         {paymentReturnInfo && (
           <PaymentReturnModal
             orderId={paymentReturnInfo.orderId}
