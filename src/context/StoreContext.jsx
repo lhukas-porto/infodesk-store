@@ -606,6 +606,9 @@ export function StoreProvider({ children }) {
         const dbOrders = await fetchOrdersFromDb()
         if (isMounted && dbOrders !== null) {
           setOrders(dbOrders)
+          try {
+            localStorage.setItem('infodesk_orders', JSON.stringify(dbOrders))
+          } catch (e) {}
         }
 
         // 4. Configurações Globais (Alíquota Fiscal & Credenciais Admin)
