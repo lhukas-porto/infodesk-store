@@ -100,7 +100,7 @@ import {
   mapMercadoPagoStatus,
   createMercadoPagoOrderPayload,
   createMercadoPagoPreferencePayload
-} from '../api/payments/mercadopago/service.js'
+} from '../lib/api/payments/mercadopago/service.js'
 
 import {
   mapDbProductToApp,

@@ -4,7 +4,7 @@ import {
   verifyWebhookSignature,
   mapMercadoPagoStatus,
   createMercadoPagoOrderPayload
-} from '../api/payments/mercadopago/service.js';
+} from '../lib/api/payments/mercadopago/service.js';
 
 console.log('🧪 Iniciando suíte de testes unitários do Mercado Pago Orders API...\n');
 

@@ -37,8 +37,17 @@ async function getHandler(path) {
   if (path.startsWith('/api/barcode/identify-photo')) {
     return (await import('../lib/api/barcode/identify-photo.js')).default
   }
+  if (path.startsWith('/api/products/search-images')) {
+    return (await import('../lib/api/products/search-images.js')).default
+  }
+  if (path.startsWith('/api/products/ai-fill') || path.startsWith('/api/barcode/identify-text')) {
+    return (await import('../lib/api/barcode/identify-text.js')).default
+  }
   if (path.startsWith('/api/barcode/confirm-match')) {
     return (await import('../lib/api/barcode/confirm-match.js')).default
+  }
+  if (path.startsWith('/api/admin/auth')) {
+    return (await import('../lib/api/admin/auth.js')).default
   }
   if (path.startsWith('/api/company/config')) {
     return (await import('../lib/api/company/config.js')).default

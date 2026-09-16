@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect } from 'react'
 import {
   X, Camera, CheckCircle2, AlertCircle, Sparkles, Upload,
   Search, RefreshCw, Printer, Download, Plus, ArrowRight, Image as ImageIcon, Loader2,
-  ExternalLink, Eye, Check, Trash2, HelpCircle, Info, Layers
+  ExternalLink, Eye, Check, Trash2, HelpCircle, Info, Layers, FileText
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import {
   generateValidEan13,
   fetchProductByBarcode,
   identifyProductByPhoto,
-  confirmProductPhotoMatch
+  confirmProductPhotoMatch,
+  fetchProductByDescription
 } from '../services/barcodeService'
 import { getCompanyPublicName } from '../services/companyService'
 import BarcodeLabel from './BarcodeLabel'
@@ -36,6 +37,12 @@ export default function BarcodeScannerModal() {
   const [isBarcodeSearching, setIsBarcodeSearching] = useState(false)
   const [webProductResult, setWebProductResult] = useState(null)
   const [webNotFound, setWebNotFound] = useState(null)
+
+  // Busca Inteligente por Descrição / Texto (IA Gemini)
+  const [descriptionQuery, setDescriptionQuery] = useState('')
+  const [isDescriptionSearching, setIsDescriptionSearching] = useState(false)
+  const [descriptionCandidates, setDescriptionCandidates] = useState([])
+  const [descriptionError, setDescriptionError] = useState(null)
 
   // Barcode / Label generation state
   const [generatedEan, setGeneratedEan] = useState('')
@@ -193,12 +200,14 @@ export default function BarcodeScannerModal() {
 
     try {
       const res = await identifyProductByPhoto(photoToUse)
-      if (res.success && res.candidates && res.candidates.length > 0) {
-        setSearchResults(res.candidates)
+      if (res.success && (res.product || (res.candidates && res.candidates.length > 0))) {
+        const prod = res.product || res.candidates[0]
+        setWebProductResult(prod)
+        setSearchResults(res.candidates || [prod])
         setPhotoImageHash(res.imageHash || '')
         setPhotoAnalysisMeta(res.analysis || null)
         playAudioBeep()
-        showToast(res.message || 'Produtos candidatos encontrados! 📸🎯')
+        showToast(res.message || `Produto "${prod.name}" identificado com sucesso! 📸🎯`)
       } else if (res.configMissing) {
         setPhotoSearchError({
           title: 'Configuração de Chave Necessária',
@@ -244,22 +253,31 @@ export default function BarcodeScannerModal() {
         selectedResult: item
       })
 
-      // 2. Adiciona ao catálogo/estoque da loja
+      // 2. Adiciona ao catálogo/estoque da loja com ficha completa
       addProduct({
         name: item.name,
         brand: item.brand || publicName,
+        manufacturer: item.manufacturer || item.brand || publicName,
+        model: item.model || '',
+        partNumber: item.partNumber || item.mpn || '',
+        mpn: item.partNumber || item.mpn || '',
         category: item.category || 'Hardware',
-        costPrice: cost,
+        costPrice: item.costPrice || cost,
         taxRate: 10,
         marginRate: 30,
         price: price,
         originalPrice: Math.round(price * 1.15 * 100) / 100,
         stock: 1,
         ean: autoEan,
+        gtin: item.gtin || autoEan,
+        gtin14: item.gtin14 || '',
+        ncm: item.ncm || '',
+        weight: item.weight || null,
+        dimensions: item.dimensions || null,
         featured: false,
-        description: item.matchReason
+        description: item.description || (item.matchReason
           ? `Produto identificado por fotografia. ${item.matchReason}`
-          : 'Produto identificado e confirmado por foto.',
+          : 'Produto identificado e confirmado por foto.'),
         images: (item.images && item.images.length > 0)
           ? item.images
           : (capturedPhoto ? [capturedPhoto] : ['https://images.unsplash.com/photo-1518770660439-4636190af475?w=600']),
@@ -307,23 +325,37 @@ export default function BarcodeScannerModal() {
     setActiveTab('label')
   }
 
-  // Aceita uma sugestão encontrada na internet e cadastra
+  // Aceita uma sugestão encontrada na internet e cadastra com ficha completa
   const handleSelectSearchResult = (item) => {
-    const autoEan = generateValidEan13('789')
+    const autoEan = item.ean || generateValidEan13('789')
+    const price = item.suggestedPrice || 99.90
+    const cost = item.costPrice || Math.round(price * 0.7 * 100) / 100
+
     addProduct({
       name: item.name,
-      brand: item.brand,
-      category: item.category,
-      costPrice: Math.round((item.suggestedPrice * 0.7) * 100) / 100,
+      brand: item.brand || publicName,
+      manufacturer: item.manufacturer || item.brand || publicName,
+      model: item.model || '',
+      partNumber: item.partNumber || item.mpn || '',
+      mpn: item.partNumber || item.mpn || '',
+      category: item.category || 'Hardware',
+      costPrice: cost,
       taxRate: 10,
       marginRate: 30,
-      price: item.suggestedPrice,
-      originalPrice: Math.round(item.suggestedPrice * 1.15 * 100) / 100,
+      price: price,
+      originalPrice: Math.round(price * 1.15 * 100) / 100,
       stock: 1,
       ean: autoEan,
+      gtin: item.gtin || autoEan,
+      gtin14: item.gtin14 || '',
+      ncm: item.ncm || '',
+      weight: item.weight || null,
+      dimensions: item.dimensions || null,
       featured: false,
-      description: item.description,
-      images: capturedPhoto ? [capturedPhoto, ...item.images] : item.images,
+      description: item.description || 'Produto identificado e catalogado por fotografia.',
+      images: (item.images && item.images.length > 0)
+        ? item.images
+        : (capturedPhoto ? [capturedPhoto] : ['https://images.unsplash.com/photo-1518770660439-4636190af475?w=600']),
       specs: item.specs || []
     })
 
@@ -368,13 +400,29 @@ export default function BarcodeScannerModal() {
 
   // Cadastra um produto identificado na web diretamente no catálogo/estoque
   const handleRegisterWebProduct = (item, customEan) => {
-    const eanToUse = customEan || item.ean || manualEan || generateValidEan13('789')
+    const eanToUse = customEan || item.ean || item.gtin || manualEan || generateValidEan13('789')
     const price = item.suggestedPrice || 99.90
-    const cost = Math.round(price * 0.7 * 100) / 100
+    const cost = item.costPrice || Math.round(price * 0.7 * 100) / 100
+
+    if (activeTab === 'photo' && photoImageHash) {
+      confirmProductPhotoMatch({
+        imageHash: photoImageHash,
+        ean: eanToUse,
+        brand: item.brand,
+        model: item.model,
+        partNumber: item.partNumber,
+        name: item.name,
+        selectedResult: item
+      }).catch(err => console.warn('Erro ao salvar correspondência de foto:', err))
+    }
 
     addProduct({
       name: item.name,
       brand: item.brand || publicName,
+      manufacturer: item.manufacturer || item.brand || publicName,
+      model: item.model || '',
+      partNumber: item.partNumber || item.mpn || '',
+      mpn: item.partNumber || item.mpn || '',
       category: item.category || 'Hardware',
       costPrice: cost,
       taxRate: 10,
@@ -383,8 +431,13 @@ export default function BarcodeScannerModal() {
       originalPrice: Math.round(price * 1.15 * 100) / 100,
       stock: 1,
       ean: eanToUse,
+      gtin: item.gtin || eanToUse,
+      gtin14: item.gtin14 || '',
+      ncm: item.ncm || '',
+      weight: item.weight || null,
+      dimensions: item.dimensions || null,
       featured: false,
-      description: item.description || 'Produto cadastrado via leitor de código de barras online.',
+      description: item.description || (activeTab === 'photo' ? 'Produto identificado com inteligência visual e catalogado com sucesso.' : 'Produto cadastrado via leitor de código de barras online.'),
       images: item.images && item.images.length > 0 ? item.images : ['https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'],
       specs: item.specs || []
     })
@@ -497,6 +550,59 @@ export default function BarcodeScannerModal() {
     searchBarcodeOnWeb(manualEan)
   }
 
+  // Busca Inteligente de Produto por Descrição / Texto (IA Gemini)
+  const handleSearchByDescription = async (textToSearch) => {
+    const text = (textToSearch !== undefined ? textToSearch : descriptionQuery).trim()
+    if (!text || text.length < 3) {
+      showToast('Digite pelo menos 3 caracteres da descrição do produto.')
+      return
+    }
+
+    setIsDescriptionSearching(true)
+    setDescriptionCandidates([])
+    setDescriptionError(null)
+    setWebProductResult(null)
+
+    try {
+      const res = await fetchProductByDescription(text)
+      if (res.success && res.found) {
+        if (!res.exactMatch && res.candidates && res.candidates.length > 1) {
+          setDescriptionCandidates(res.candidates)
+          setWebProductResult(null)
+          playAudioBeep()
+          showToast(`${res.candidates.length} modelos encontrados! Selecione o produto desejado. 🔍`)
+        } else if (res.product) {
+          setWebProductResult(res.product)
+          setDescriptionCandidates([])
+          playAudioBeep()
+          showToast(`Produto "${res.product.name}" identificado com sucesso pela IA! ✨🎯`)
+        } else {
+          setWebProductResult(null)
+          setDescriptionError('Produto não identificado com precisão.')
+          showToast('Produto não identificado.', 'error')
+        }
+      } else {
+        setWebProductResult(null)
+        setDescriptionError(res.error || 'Não foi possível identificar o produto com base no texto informado.')
+        showToast(res.error || 'Produto não identificado.', 'error')
+      }
+    } catch (err) {
+      console.error('Erro na busca por descrição:', err)
+      setWebProductResult(null)
+      setDescriptionError('Falha temporária de conexão com o serviço de inteligência artificial.')
+      showToast('Erro ao consultar inteligência artificial.', 'error')
+    } finally {
+      setIsDescriptionSearching(false)
+    }
+  }
+
+  const handleSelectDescriptionCandidate = (cand) => {
+    setWebProductResult(cand)
+    setDescriptionCandidates([])
+    playAudioBeep()
+    showToast(`Produto "${cand.name}" selecionado! ✨`)
+  }
+
   const close = () => {
     stopCamera()
     setShowScanner(false)
@@ -510,6 +616,10 @@ export default function BarcodeScannerModal() {
     setManualSearched(false)
     setWebProductResult(null)
     setIsBarcodeSearching(false)
+    setDescriptionQuery('')
+    setIsDescriptionSearching(false)
+    setDescriptionCandidates([])
+    setDescriptionError(null)
   }
 
   // Suporte a fechar scanner com tecla ESC
@@ -524,10 +634,155 @@ export default function BarcodeScannerModal() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showScanner])
 
+  // Renderizador canônico unificado do card de produto identificado (usado tanto pelo Código de Barras quanto pela IA por Descrição)
+  const renderWebResultCard = (result, defaultEan = '') => {
+    if (!result) return null
+    const cardEan = result.gtin || result.ean || defaultEan || manualEan
+
+    return (
+      <div className="bcs-web-result-card">
+        <div className="bcs-web-header">
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="badge badge-lime">
+              <Sparkles size={12} /> {result.source || 'Base de Dados GTIN'}
+            </span>
+            {result.confidence && (
+              <span className="badge badge-dark" style={{ background: '#064e3b', color: '#6ee7b7' }}>
+                ✓ {result.confidence}
+              </span>
+            )}
+          </div>
+          {detectedProduct ? (
+            <span className="badge badge-blue">✓ Já em estoque na sua loja ({detectedProduct.stock} un)</span>
+          ) : (
+            <span className="badge badge-amber">Novo Produto / Pronto para Cadastrar</span>
+          )}
+        </div>
+
+        <div className="bcs-web-body">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <img
+              src={result.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'}
+              alt={result.name}
+              className="bcs-web-thumb"
+            />
+            {result.images && result.images.length > 1 && (
+              <div style={{ display: 'flex', gap: 4, maxWidth: 120, overflowX: 'auto', paddingBottom: 2 }}>
+                {result.images.slice(0, 4).map((thumb, tIdx) => (
+                  <img
+                    key={tIdx}
+                    src={thumb}
+                    alt={`Foto ${tIdx + 1}`}
+                    title="Clique para escolher como foto principal"
+                    style={{
+                      width: 26,
+                      height: 26,
+                      objectFit: 'contain',
+                      borderRadius: 4,
+                      border: tIdx === 0 ? '2px solid var(--lime)' : '1px solid var(--dark-300)',
+                      cursor: 'pointer',
+                      background: '#fff'
+                    }}
+                    onClick={() => {
+                      const reordered = [thumb, ...result.images.filter(x => x !== thumb)]
+                      setWebProductResult({ ...result, images: reordered })
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="bcs-web-info">
+            <div className="bcs-web-tags">
+              <span className="badge badge-dark">{result.brand}</span>
+              {result.manufacturer && result.manufacturer !== result.brand && (
+                <span className="badge badge-dark" style={{ opacity: 0.85 }}>Fab: {result.manufacturer}</span>
+              )}
+              <span className="badge badge-light">{result.category}</span>
+              {cardEan && (
+                <span className="bcs-ean-tag">GTIN/EAN: <code>{cardEan}</code></span>
+              )}
+              {result.gtin14 && (
+                <span className="bcs-ean-tag" title="GTIN-14 Normalizado">GTIN-14: <code>{result.gtin14}</code></span>
+              )}
+              {result.partNumber && (
+                <span className="badge badge-dark" style={{ background: '#1e1b4b', color: '#a5b4fc' }}>
+                  P/N: {result.partNumber}
+                </span>
+              )}
+              {result.model && (
+                <span className="badge badge-light">Mod: {result.model}</span>
+              )}
+              {result.ncm && (
+                <span className="badge badge-light">NCM: {result.ncm}</span>
+              )}
+              {result.weight && (
+                <span className="badge badge-light">Peso: {String(result.weight).toLowerCase().endsWith('g') ? result.weight : `${result.weight} kg`}</span>
+              )}
+            </div>
+
+            <h3 className="bcs-web-title">{result.name}</h3>
+
+            {result.description && (
+              <p className="bcs-web-desc">{result.description}</p>
+            )}
+
+            {result.specs && result.specs.length > 0 && (
+              <div className="bcs-web-specs">
+                {result.specs.map((spec, sIdx) => (
+                  <span key={sIdx} className="bcs-spec-pill">
+                    <strong>{spec.label}:</strong> {spec.value}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="bcs-web-pricing-row">
+              <div className="bcs-price-col">
+                <span className="bcs-price-label">Preço Sugerido de Mercado</span>
+                <span className="bcs-price-val">
+                  R$ {(result.suggestedPrice || 99.90).toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+              <div className="bcs-actions-col">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleRegisterWebProduct(result, cardEan)}
+                >
+                  <Plus size={16} /> Adicionar ao Estoque da Loja
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    const autoEan = cardEan || generateValidEan13('789')
+                    setGeneratedEan(autoEan)
+                    setCustomProduct({
+                      name: result.name,
+                      brand: result.brand,
+                      category: result.category,
+                      price: result.suggestedPrice || '',
+                      costPrice: result.costPrice || Math.round((result.suggestedPrice || 99.90) * 0.7 * 100) / 100,
+                      stock: 1
+                    })
+                    setActiveTab('label')
+                  }}
+                >
+                  <Printer size={16} /> Imprimir Etiqueta
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!showScanner) return null
 
   return (
-    <div className="overlay">
+    <div className="overlay" style={{ zIndex: 1250 }}>
       <div className="modal modal-lg bcs-modal">
         {/* Header */}
         <div className="bcs-header">
@@ -537,7 +792,13 @@ export default function BarcodeScannerModal() {
             </span>
             <h2>Scanner & Reconhecimento de Produtos</h2>
           </div>
-          <button className="modal-close" onClick={close} aria-label="Fechar">
+          <button
+            type="button"
+            className="bcs-close-btn"
+            onClick={close}
+            title="Fechar Scanner"
+            aria-label="Fechar Scanner"
+          >
             <X size={20} />
           </button>
         </div>
@@ -554,11 +815,18 @@ export default function BarcodeScannerModal() {
             className={`bcs-tab ${activeTab === 'photo' ? 'active' : ''}`}
             onClick={() => { stopCamera(); setActiveTab('photo') }}
           >
-            <Camera size={16} /> 2. Buscar produto pela foto
+            <Camera size={16} /> 2. Buscar pela foto
+          </button>
+          <button
+            className={`bcs-tab ${activeTab === 'description' ? 'active' : ''}`}
+            onClick={() => { stopCamera(); setActiveTab('description') }}
+          >
+            <Sparkles size={16} /> 3. Buscar por nome (IA)
           </button>
           <button
             className={`bcs-tab ${activeTab === 'label' ? 'active' : ''}`}
             onClick={() => {
+              stopCamera()
               if (!generatedEan) setGeneratedEan(generateValidEan13('789'))
               setActiveTab('label')
             }}
@@ -773,140 +1041,69 @@ export default function BarcodeScannerModal() {
                 </div>
               )}
 
-              {/* Exibição dos Produtos Candidatos Encontrados */}
+              {/* Exibição dos Produtos Identificados com Riqueza Máxima de Detalhes */}
               {searchResults && searchResults.length > 0 && !isSearching && (
-                <div className="bcs-results-container">
-                  <div className="bcs-results-header">
-                    <div>
-                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--lime-dark)', margin: 0 }}>
-                        <Sparkles size={18} /> Produtos Candidatos Identificados ({searchResults.length})
-                      </h4>
-                      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)', margin: '4px 0 0' }}>
-                        Revise os candidatos e clique em <strong>Confirmar produto</strong> para cadastrar no catálogo.
-                      </p>
-                    </div>
-                    {searchResults[0]?.classification === 'exata' && (
-                      <span className="badge badge-lime" style={{ fontWeight: 700 }}>
-                        ✓ Correspondência Exata
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="bcs-candidates-list">
-                    {searchResults.map((item, i) => (
-                      <div
-                        key={i}
-                        className={`bcs-candidate-card ${item.classification === 'exata' ? 'bcs-candidate-exact' : ''}`}
-                      >
-                        <div className="bcs-candidate-main">
-                          <img
-                            src={item.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'}
-                            alt={item.name}
-                            className="bcs-candidate-thumb"
-                          />
-                          <div className="bcs-candidate-info">
-                            <div className="bcs-candidate-badges">
-                              <span className={`badge ${item.classification === 'exata' ? 'badge-lime' : 'badge-dark'}`}>
-                                {item.confidence || 'Correspondência Técnica'}
-                              </span>
-                              {item.score && (
-                                <span className="bcs-score-pill">
-                                  {item.score}% precisão
-                                </span>
-                              )}
-                              <span className="badge badge-light">{item.source || 'Base de Hardware'}</span>
-                            </div>
-
-                            <h3 className="bcs-candidate-name">{item.name}</h3>
-
-                            <div className="bcs-candidate-meta-grid">
-                              {item.brand && (
-                                <span className="bcs-meta-tag"><strong>Marca:</strong> {item.brand}</span>
-                              )}
-                              {item.model && (
-                                <span className="bcs-meta-tag"><strong>Modelo:</strong> {item.model}</span>
-                              )}
-                              {item.partNumber && (
-                                <span className="bcs-meta-tag" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#a5b4fc' }}>
-                                  <strong>P/N:</strong> {item.partNumber}
-                                </span>
-                              )}
-                              {item.ean && (
-                                <span className="bcs-meta-tag" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
-                                  <strong>GTIN/EAN:</strong> {item.ean}
-                                </span>
-                              )}
-                            </div>
-
-                            {item.specs && item.specs.length > 0 && (
-                              <div className="bcs-candidate-specs">
-                                {item.specs.slice(0, 4).map((spec, sIdx) => (
-                                  <span key={sIdx} className="bcs-spec-pill">
-                                    <strong>{spec.label}:</strong> {spec.value}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {item.matchReason && (
-                              <div className="bcs-match-reason">
-                                <Info size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-                                <span><strong>Motivo:</strong> {item.matchReason}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Linha de Preço e Ações */}
-                        <div className="bcs-candidate-footer">
-                          <div className="bcs-candidate-price">
-                            <span style={{ fontSize: 10, color: 'var(--dark-400)', textTransform: 'uppercase', fontWeight: 700 }}>
-                              Preço Sugerido
-                            </span>
-                            <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--lime-dark)' }}>
-                              R$ {(item.suggestedPrice || 99.90).toFixed(2).replace('.', ',')}
-                            </span>
-                          </div>
-
-                          <div className="bcs-candidate-actions">
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => handleConfirmCandidate(item)}
-                              disabled={photoIsConfirming}
-                            >
-                              <Check size={14} /> Confirmar Produto
-                            </button>
-
-                            {item.link && (
-                              <a
-                                href={item.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-outline btn-sm"
-                              >
-                                <ExternalLink size={13} /> Ver Oferta
-                              </a>
-                            )}
-
-                            <button
-                              type="button"
-                              className="btn btn-outline btn-sm"
-                              onClick={() => handleFillManualFromCandidate(item)}
-                            >
-                              Informar Manualmente
-                            </button>
-                          </div>
-                        </div>
+                <div className="bcs-results-container" style={{ marginTop: 'var(--space-4)' }}>
+                  {searchResults.length > 1 && (
+                    <div className="bcs-candidates-wrap" style={{ marginBottom: 'var(--space-4)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <h4 style={{ margin: 0, fontSize: 13, color: 'var(--dark-800)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Sparkles size={15} style={{ color: 'var(--lime-dark)' }} />
+                          Modelos compatíveis identificados ({searchResults.length}):
+                        </h4>
+                        <span style={{ fontSize: 11, color: 'var(--dark-500)' }}>
+                          Clique para alternar a ficha técnica completa:
+                        </span>
                       </div>
-                    ))}
-                  </div>
+                      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
+                        {searchResults.map((cand, cIdx) => {
+                          const currentProd = webProductResult || searchResults[0]
+                          const isSelected = currentProd?.name === cand.name
+                          return (
+                            <button
+                              key={cIdx}
+                              type="button"
+                              className={`bcs-tab ${isSelected ? 'active' : ''}`}
+                              style={{
+                                borderRadius: 'var(--radius-lg)',
+                                border: isSelected ? '2px solid var(--lime)' : '1px solid var(--dark-200)',
+                                background: isSelected ? '#f7fee7' : '#ffffff',
+                                padding: '8px 12px',
+                                fontSize: 12,
+                                textAlign: 'left',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                transition: 'all 0.2s ease'
+                              }}
+                              onClick={() => setWebProductResult(cand)}
+                            >
+                              <img
+                                src={cand.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'}
+                                alt=""
+                                style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 4, background: '#fff', border: '1px solid var(--dark-200)' }}
+                              />
+                              <span>
+                                <strong style={{ color: 'var(--dark-900)' }}>{cand.brand}</strong>{' '}
+                                <span style={{ color: 'var(--dark-700)' }}>{cand.model || cand.name}</span>
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-                  <div className="bcs-no-match-banner" style={{ marginTop: 12 }}>
+                  {/* Ficha técnica canônica idêntica à busca por descrição com descrição comercial completa, fotos e especificações */}
+                  {renderWebResultCard(webProductResult || searchResults[0], (webProductResult || searchResults[0]).ean || '')}
+
+                  <div className="bcs-no-match-banner" style={{ marginTop: 16 }}>
                     <div>
-                      <strong>Não é nenhum destes modelos?</strong>
+                      <strong>Não é este produto?</strong>
                       <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
-                        Você pode tirar outra fotografia ou cadastrar os dados manualmente gerando uma nova etiqueta.
+                        Você pode tirar outra fotografia com melhor enquadramento ou cadastrar manualmente.
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -916,6 +1113,7 @@ export default function BarcodeScannerModal() {
                         onClick={() => {
                           setCapturedPhoto(null)
                           setSearchResults(null)
+                          setWebProductResult(null)
                           startCamera()
                         }}
                       >
@@ -1030,106 +1228,7 @@ export default function BarcodeScannerModal() {
               )}
 
               {/* Resultado da busca online */}
-              {webProductResult && !isBarcodeSearching && (
-                <div className="bcs-web-result-card">
-                  <div className="bcs-web-header">
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span className="badge badge-lime">
-                        <Sparkles size={12} /> {webProductResult.source || 'Base de Dados GTIN'}
-                      </span>
-                      {webProductResult.confidence && (
-                        <span className="badge badge-dark" style={{ background: '#064e3b', color: '#6ee7b7' }}>
-                          ✓ {webProductResult.confidence}
-                        </span>
-                      )}
-                    </div>
-                    {detectedProduct ? (
-                      <span className="badge badge-blue">✓ Já em estoque na sua loja ({detectedProduct.stock} un)</span>
-                    ) : (
-                      <span className="badge badge-amber">Novo Produto / Pronto para Cadastrar</span>
-                    )}
-                  </div>
-
-                  <div className="bcs-web-body">
-                    <img
-                      src={webProductResult.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'}
-                      alt={webProductResult.name}
-                      className="bcs-web-thumb"
-                    />
-                    <div className="bcs-web-info">
-                      <div className="bcs-web-tags">
-                        <span className="badge badge-dark">{webProductResult.brand}</span>
-                        {webProductResult.manufacturer && webProductResult.manufacturer !== webProductResult.brand && (
-                          <span className="badge badge-dark" style={{ opacity: 0.85 }}>Fab: {webProductResult.manufacturer}</span>
-                        )}
-                        <span className="badge badge-light">{webProductResult.category}</span>
-                        <span className="bcs-ean-tag">GTIN: <code>{webProductResult.gtin || webProductResult.ean || manualEan}</code></span>
-                        {webProductResult.gtin14 && (
-                          <span className="bcs-ean-tag" title="GTIN-14 Normalizado">GTIN-14: <code>{webProductResult.gtin14}</code></span>
-                        )}
-                        {webProductResult.partNumber && (
-                          <span className="badge badge-dark" style={{ background: '#1e1b4b', color: '#a5b4fc' }}>
-                            P/N: {webProductResult.partNumber}
-                          </span>
-                        )}
-                        {webProductResult.ncm && (
-                          <span className="badge badge-light">NCM: {webProductResult.ncm}</span>
-                        )}
-                      </div>
-                      <h3 className="bcs-web-title">{webProductResult.name}</h3>
-                      {webProductResult.description && (
-                        <p className="bcs-web-desc">{webProductResult.description}</p>
-                      )}
-
-                      {webProductResult.specs && webProductResult.specs.length > 0 && (
-                        <div className="bcs-web-specs">
-                          {webProductResult.specs.map((spec, sIdx) => (
-                            <span key={sIdx} className="bcs-spec-pill">
-                              <strong>{spec.label}:</strong> {spec.value}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="bcs-web-pricing-row">
-                        <div className="bcs-price-col">
-                          <span className="bcs-price-label">Preço Sugerido de Mercado</span>
-                          <span className="bcs-price-val">
-                            R$ {(webProductResult.suggestedPrice || 99.90).toFixed(2).replace('.', ',')}
-                          </span>
-                        </div>
-                        <div className="bcs-actions-col">
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => handleRegisterWebProduct(webProductResult, manualEan)}
-                          >
-                            <Plus size={16} /> Adicionar ao Estoque da Loja
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline"
-                            onClick={() => {
-                              setGeneratedEan(manualEan || generateValidEan13('789'))
-                              setCustomProduct({
-                                name: webProductResult.name,
-                                brand: webProductResult.brand,
-                                category: webProductResult.category,
-                                price: webProductResult.suggestedPrice || '',
-                                costPrice: Math.round((webProductResult.suggestedPrice || 99.90) * 0.7 * 100) / 100,
-                                stock: 1
-                              })
-                              setActiveTab('label')
-                            }}
-                          >
-                            <Printer size={16} /> Imprimir Etiqueta
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {webProductResult && manualSearched && !isBarcodeSearching && renderWebResultCard(webProductResult, manualEan)}
 
               {/* Quando o código foi lido com sucesso mas não indexado no catálogo online */}
               {webNotFound && !isBarcodeSearching && !webProductResult && (
@@ -1217,7 +1316,191 @@ export default function BarcodeScannerModal() {
             </div>
           )}
 
-          {/* TAB 3: Gerador de Etiquetas & Código de Barras Próprio */}
+          {/* TAB 3: Buscar Produto por Nome / Descrição (IA Gemini) */}
+          {activeTab === 'description' && (
+            <div className="bcs-desc-view">
+              <div className="bcs-photo-intro-banner">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 24 }}>✨</span>
+                  <div>
+                    <strong style={{ color: 'var(--white)', fontSize: 14, display: 'block' }}>
+                      Identificação & Enriquecimento Automático por Descrição
+                    </strong>
+                    <span style={{ fontSize: 12, color: 'var(--dark-300)' }}>
+                      Digite ou cole o nome comercial, título do fornecedor ou especificações. A IA extrai e preenche todos os campos cadastrais: marca, categoria, modelo, part number, preço de custo/venda, dimensões para os Correios e especificações técnicas!
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bcs-desc-input-box" style={{
+                background: 'var(--dark-50)',
+                padding: 'var(--space-4)',
+                borderRadius: 'var(--radius-xl)',
+                border: '1px solid var(--dark-200)'
+              }}>
+                <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--dark-800)', marginBottom: 6 }}>
+                  Nome, Modelo ou Descrição Bruta do Produto:
+                </label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    className="input-field"
+                    style={{ flex: 1, minWidth: '240px' }}
+                    value={descriptionQuery}
+                    onChange={e => {
+                      setDescriptionQuery(e.target.value)
+                      if (descriptionError) setDescriptionError(null)
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleSearchByDescription()
+                      }
+                    }}
+                    placeholder="Ex: SSD Kingston NV2 1TB M.2 NVMe PCIe 4.0 SNV2S/1000G ou Mouse Logitech G305 Lightspeed"
+                    disabled={isDescriptionSearching}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => handleSearchByDescription()}
+                    disabled={isDescriptionSearching || !descriptionQuery.trim()}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    {isDescriptionSearching ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Analisando com IA...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} /> Identificar Produto
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--dark-500)' }}>Exemplos rápidos:</span>
+                  {[
+                    'SSD Kingston NV2 1TB M.2 NVMe',
+                    'Mouse Sem Fio Logitech G305 Lightspeed',
+                    'Teclado Mecânico Redragon Kumara RGB Switch Outemu Blue',
+                    'Roteador Wi-Fi 6 TP-Link Archer AX12 Gigabit'
+                  ].map((example, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="badge badge-light"
+                      style={{ cursor: 'pointer', border: '1px solid var(--dark-200)', background: '#ffffff' }}
+                      onClick={() => {
+                        setDescriptionQuery(example)
+                        handleSearchByDescription(example)
+                      }}
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Indicador de carregamento */}
+              {isDescriptionSearching && (
+                <div className="bcs-searching-box" style={{ marginTop: 'var(--space-4)' }}>
+                  <Loader2 size={36} className="animate-spin" style={{ color: 'var(--lime-dark)' }} />
+                  <strong style={{ fontSize: 15, color: 'var(--dark-900)' }}>Identificando e estruturando produto com Inteligência Artificial...</strong>
+                  <div className="bcs-search-steps">
+                    <span className="bcs-step-item active">
+                      <span className="bcs-step-dot" /> 1. Analisando termos técnicos, marca e modelo
+                    </span>
+                    <span className="bcs-step-item active">
+                      <span className="bcs-step-dot" /> 2. Estimando preços de custo, venda e medidas dos Correios
+                    </span>
+                    <span className="bcs-step-item active">
+                      <span className="bcs-step-dot" /> 3. Gerando ficha técnica completa e descrição comercial
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Mensagem de Erro se houver */}
+              {descriptionError && !isDescriptionSearching && (
+                <div className="bcs-error-card" style={{ marginTop: 'var(--space-4)' }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <AlertCircle size={22} style={{ color: '#ef4444', flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <h4 style={{ margin: 0, color: 'var(--white)', fontSize: 14 }}>Não foi possível identificar</h4>
+                      <p style={{ margin: '4px 0 0', color: 'var(--dark-300)', fontSize: 13 }}>{descriptionError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Seleção de candidatos quando houver múltiplos modelos compatíveis */}
+              {descriptionCandidates && descriptionCandidates.length > 1 && !webProductResult && !isDescriptionSearching && (
+                <div className="bcs-candidates-wrap" style={{ marginTop: 'var(--space-4)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <h4 style={{ margin: 0, fontSize: 14, color: 'var(--dark-800)', fontWeight: 600 }}>
+                      Encontramos {descriptionCandidates.length} modelos compatíveis:
+                    </h4>
+                    <span style={{ fontSize: 12, color: 'var(--dark-500)' }}>
+                      Selecione o modelo desejado para carregar a ficha completa:
+                    </span>
+                  </div>
+                  <div className="bcs-candidates-grid" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {descriptionCandidates.map((cand, cIdx) => (
+                      <div
+                        key={cIdx}
+                        className="bcs-candidate-card"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 16px',
+                          background: '#ffffff',
+                          border: '1px solid var(--dark-200)',
+                          borderRadius: 'var(--radius-lg)',
+                          gap: 12
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <img
+                            src={cand.images?.[0] || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'}
+                            alt={cand.name}
+                            style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 6, background: '#fff', padding: 4, border: '1px solid var(--dark-200)' }}
+                          />
+                          <div>
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
+                              <span className="badge badge-dark" style={{ fontSize: 10 }}>{cand.brand}</span>
+                              {cand.model && <span className="badge badge-light" style={{ fontSize: 10 }}>Mod: {cand.model}</span>}
+                              {cand.partNumber && <span className="badge badge-light" style={{ fontSize: 10 }}>P/N: {cand.partNumber}</span>}
+                              {cand.ncm && <span className="badge badge-light" style={{ fontSize: 10 }}>NCM: {cand.ncm}</span>}
+                            </div>
+                            <strong style={{ fontSize: 13, color: 'var(--dark-900)' }}>{cand.name}</strong>
+                            {cand.matchReason && (
+                              <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--dark-500)' }}>{cand.matchReason}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleSelectDescriptionCandidate(cand)}
+                          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        >
+                          Selecionar Produto <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resultado canônico idêntico ao do Código de Barras quando localizado */}
+              {webProductResult && !isDescriptionSearching && descriptionQuery && renderWebResultCard(webProductResult, webProductResult.ean || '')}
+            </div>
+          )}
+
+          {/* TAB 4: Gerador de Etiquetas & Código de Barras Próprio */}
           {activeTab === 'label' && (
             <div className="bcs-label-view">
               <div className="bcs-label-grid">
@@ -1349,11 +1632,36 @@ export default function BarcodeScannerModal() {
           .bcs-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
+            gap: 16px;
             padding: var(--space-5) var(--space-6);
-            border-bottom: 1px solid var(--dark-100);
+            border-bottom: 1px solid var(--dark-200);
+            background: var(--white);
+            position: sticky;
+            top: 0;
+            z-index: 10;
           }
           .bcs-header-title h2 { font-size: var(--text-xl); }
+          .bcs-close-btn {
+            position: static;
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-full);
+            background: var(--dark-100);
+            border: 1px solid var(--dark-200);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--dark-600);
+            transition: all var(--transition-fast);
+            flex-shrink: 0;
+          }
+          .bcs-close-btn:hover {
+            background: var(--dark-200);
+            color: var(--dark-950);
+            transform: scale(1.06);
+          }
           .bcs-tabs {
             display: flex;
             gap: var(--space-2);
@@ -1915,6 +2223,32 @@ export default function BarcodeScannerModal() {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
+          }
+          .bcs-candidates-wrap {
+            margin-top: var(--space-4);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+          }
+          .bcs-candidates-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+          .bcs-candidate-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #ffffff;
+            border: 1px solid var(--dark-200);
+            border-radius: var(--radius-lg);
+            gap: 12px;
+            transition: all 0.2s ease;
+          }
+          .bcs-candidate-card:hover {
+            border-color: var(--lime);
+            box-shadow: 0 2px 8px rgba(132, 204, 22, 0.15);
           }
         `}</style>
       </div>

@@ -53,21 +53,31 @@ console.log('   ✓ Máscaras OK')
 
 // 5. Public Helpers Tests
 console.log('5. Testando funções auxiliares de apresentação pública...')
-assert.strictEqual(getCompanyPublicName(DEFAULT_COMPANY_DATA), 'Infodesk Store', 'Deve priorizar Nome Fantasia')
+assert.strictEqual(getCompanyPublicName({ nomeFantasia: 'Infodesk Store' }), 'Infodesk Store', 'Deve priorizar Nome Fantasia')
 assert.strictEqual(
   getCompanyPublicName({ razaoSocial: 'Empresa Teste LTDA', nomeFantasia: '' }),
   'Empresa Teste LTDA',
   'Deve usar Razão Social se Fantasia estiver vazio'
 )
-assert.strictEqual(getCompanyPublicName(null), 'Infodesk Store', 'Fallback quando nulo deve ser Infodesk Store')
+assert.strictEqual(getCompanyPublicName(null), 'Minha Loja', 'Fallback quando nulo deve ser Minha Loja')
 
-const fullAddr = getCompanyFullAddress(DEFAULT_COMPANY_DATA)
+const mockCompanyWithAddress = {
+  ...DEFAULT_COMPANY_DATA,
+  endereco: 'CLSW 304 Bloco A Sala',
+  numero: '108',
+  bairro: 'Sudoeste',
+  cidade: 'Brasília',
+  estado: 'DF',
+  cep: '70673631'
+}
+
+const fullAddr = getCompanyFullAddress(mockCompanyWithAddress)
 assert(fullAddr.includes('CLSW 304 Bloco A Sala 108'), 'Endereço deve conter logradouro e número')
 assert(fullAddr.includes('Sudoeste'), 'Endereço deve conter bairro')
 assert(fullAddr.includes('Brasília - DF'), 'Endereço deve conter cidade e estado')
-assert(fullAddr.includes('70673-631') || fullAddr.includes('70.673-631'), 'Endereço deve conter CEP')
+assert(fullAddr.includes('70673-631'), 'Endereço deve conter CEP')
 
-const mapsUrl = getCompanyGoogleMapsUrl(DEFAULT_COMPANY_DATA)
+const mapsUrl = getCompanyGoogleMapsUrl(mockCompanyWithAddress)
 assert(mapsUrl.startsWith('https://www.google.com/maps/search/?api=1&query='), 'Link do maps deve ter formato de busca')
 assert(mapsUrl.includes('CLSW+304') || mapsUrl.includes('CLSW%20304'), 'Link do maps deve conter logradouro codificado')
 

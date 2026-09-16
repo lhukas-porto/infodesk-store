@@ -6,15 +6,26 @@ import { hashCustomerPassword } from './customerService.js'
 export function mapDbProductToApp(dbProd) {
   if (!dbProd) return null
   const slug = dbProd.slug || slugify(dbProd.name)
+  const specs = Array.isArray(dbProd.specs) ? dbProd.specs : []
+  const ncmSpec = specs.find(s => s.label?.toLowerCase() === 'ncm')?.value
+  const pnSpec = specs.find(s => s.label?.toLowerCase() === 'part number' || s.label?.toLowerCase() === 'p/n')?.value
+  const modSpec = specs.find(s => s.label?.toLowerCase() === 'modelo')?.value
+  const dimSpec = specs.find(s => s.label?.toLowerCase().includes('dimens'))?.value
+  const weightSpec = specs.find(s => s.label?.toLowerCase().includes('peso'))?.value
+
   return {
     id: dbProd.id,
     companyId: dbProd.company_id || 'default',
     name: dbProd.name,
     slug,
     brand: dbProd.brand || '',
+    model: dbProd.model || modSpec || '',
+    partNumber: dbProd.part_number || dbProd.partNumber || dbProd.mpn || pnSpec || '',
+    ncm: dbProd.ncm || ncmSpec || '',
+    dimensions: dbProd.dimensions || dimSpec || '',
     category: dbProd.category || 'Outros',
     description: dbProd.description || '',
-    specs: Array.isArray(dbProd.specs) ? dbProd.specs : [],
+    specs: specs,
     images: Array.isArray(dbProd.images) ? dbProd.images : [],
     costPrice: parseFloat(dbProd.cost_price) || 0,
     taxRate: parseFloat(dbProd.tax_rate) || 9.05,
@@ -30,7 +41,7 @@ export function mapDbProductToApp(dbProd) {
     featured: Boolean(dbProd.featured),
     ean: dbProd.ean || '',
     active: dbProd.active !== false,
-    weight: parseInt(dbProd.weight_g, 10) || 500,
+    weight: dbProd.weight || weightSpec || (dbProd.weight_g ? `${dbProd.weight_g}g` : ''),
     length: parseInt(dbProd.length_cm, 10) || 20,
     width: parseInt(dbProd.width_cm, 10) || 15,
     height: parseInt(dbProd.height_cm, 10) || 10,
@@ -39,7 +50,7 @@ export function mapDbProductToApp(dbProd) {
     seo_description: dbProd.seo_description || dbProd.description || '',
     image_alt: dbProd.image_alt || dbProd.name,
     primary_keyword: dbProd.primary_keyword || '',
-    mpn: dbProd.mpn || '',
+    mpn: dbProd.mpn || dbProd.part_number || pnSpec || '',
     google_category: dbProd.google_category || '',
     is_anchor: Boolean(dbProd.is_anchor),
     weekly_offer: Boolean(dbProd.weekly_offer),
@@ -56,8 +67,20 @@ export function mapAppProductToDb(appProd) {
 
   // Preserva especificações e dimensões dentro de specs JSONB
   const specs = Array.isArray(appProd.specs) ? [...appProd.specs] : []
+  if (appProd.ncm && !specs.some(s => s.label?.toLowerCase() === 'ncm')) {
+    specs.unshift({ label: 'NCM', value: String(appProd.ncm) })
+  }
+  if ((appProd.partNumber || appProd.mpn) && !specs.some(s => s.label?.toLowerCase() === 'part number' || s.label?.toLowerCase() === 'p/n')) {
+    specs.unshift({ label: 'Part Number', value: String(appProd.partNumber || appProd.mpn) })
+  }
+  if (appProd.model && !specs.some(s => s.label?.toLowerCase() === 'modelo')) {
+    specs.unshift({ label: 'Modelo', value: String(appProd.model) })
+  }
   if (appProd.weight && !specs.some(s => s.label?.toLowerCase().includes('peso'))) {
-    specs.push({ label: 'Peso', value: `${appProd.weight}g` })
+    specs.push({ label: 'Peso', value: `${appProd.weight}` })
+  }
+  if (appProd.dimensions && !specs.some(s => s.label?.toLowerCase().includes('dimens'))) {
+    specs.push({ label: 'Dimensões', value: `${appProd.dimensions}` })
   }
 
   const slug = appProd.slug || slugify(appProd.name)

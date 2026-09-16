@@ -174,11 +174,11 @@ runTest('Validação e rejeição de CEP inválido', () => {
 // =========================================================================
 // 8. Produto sem peso/dimensões recebe valores de segurança
 // =========================================================================
-runTest('Produtos sem dimensões/pesos recebem valores de segurança mínimos', () => {
+runAsyncTest('Produtos sem dimensões/pesos recebem valores de segurança mínimos', async () => {
   const rawItems = [
     { productId: 'unknown-item-123', quantity: 2 }
   ]
-  const enriched = enrichItemsWithRealData(rawItems)
+  const enriched = await enrichItemsWithRealData(rawItems)
   assert.equal(enriched.length, 1)
   assert.ok(enriched[0].weight >= 300, 'Peso deve ser >= 300g')
   assert.ok(enriched[0].length >= 15, 'Comprimento deve ser >= 15cm')

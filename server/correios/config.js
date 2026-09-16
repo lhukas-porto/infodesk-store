@@ -8,7 +8,16 @@ const CONFIG_FILE_PATH = path.resolve(process.cwd(), 'server/correios/.correios_
 // Mapa em memória de configurações por empresa/loja (store_id)
 const storeConfigs = new Map()
 
-// Carrega configurações persistidas do disco na inicialização
+import { createClient } from '@supabase/supabase-js'
+
+function getSupabase() {
+  const url = process.env.VITE_SUPABASE_URL || 'https://wcddxzbjttfxrercadlb.supabase.co'
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  return createClient(url, key)
+}
+
+// Carrega configurações persistidas do disco na inicialização (apenas se existir)
 function loadPersistedConfigs() {
   try {
     if (fs.existsSync(CONFIG_FILE_PATH)) {
@@ -25,8 +34,11 @@ function loadPersistedConfigs() {
   }
 }
 
-// Salva configurações no disco
+// Salva configurações (evita falha em filesystem somente-leitura da Vercel)
 function persistConfigs() {
+  if (process.env.VERCEL) {
+    return // Na Vercel o filesystem é read-only; o estado é mantido em memória e no Supabase
+  }
   try {
     const obj = {}
     for (const [key, val] of storeConfigs.entries()) {
@@ -42,7 +54,7 @@ function persistConfigs() {
   }
 }
 
-// Inicializa lendo do disco
+// Inicializa lendo do disco se disponível
 loadPersistedConfigs()
 
 export const CORREIOS_SERVICES = [
@@ -119,6 +131,20 @@ export function setStoreCorreiosConfig(storeId = 'default', updates = {}) {
 
   storeConfigs.set(storeId, merged)
   persistConfigs()
+
+  try {
+    const sb = getSupabase()
+    if (sb) {
+      sb.from('store_settings').upsert({
+        key: `correios_config_${storeId}`,
+        value: merged,
+        updated_at: new Date().toISOString()
+      }).then(({ error }) => {
+        if (error) console.warn('[Correios Config] Falha ao sincronizar com Supabase:', error.message)
+      }).catch(() => {})
+    }
+  } catch {}
+
   return merged
 }
 

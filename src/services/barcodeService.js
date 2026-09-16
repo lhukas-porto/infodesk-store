@@ -1,6 +1,7 @@
 // Serviço de Geração de Código de Barras EAN-13 e Etiquetas Infodesk
 import jsPDF from 'jspdf'
-import { getCompanyPublicName } from './companyService'
+import { getCompanyPublicName } from './companyService.js'
+import { normalizeProductResult } from './productNormalizer.js'
 
 function getCompanyDataLocal() {
   try {
@@ -146,12 +147,13 @@ export async function fetchProductByBarcode(ean) {
     const data = await res.json()
     if (data.success) {
       if (data.found && data.data) {
+        const normalized = normalizeProductResult(data.data, 'Base de Dados GTIN')
         return {
           success: true,
           found: true,
-          product: data.data,
+          product: normalized,
           ean: data.ean || cleanEan,
-          gtin14: data.gtin14 || data.data.gtin14
+          gtin14: data.gtin14 || normalized.gtin14
         }
       } else {
         return {
@@ -240,6 +242,22 @@ export async function identifyProductByPhoto(imageSource) {
     })
 
     const data = await res.json()
+    if (data.success && (data.product || data.data || (data.candidates && data.candidates.length > 0))) {
+      const rawProduct = data.product || data.data || data.candidates[0]
+      const normalized = normalizeProductResult(rawProduct, 'Visão Computacional (Gemini AI)')
+
+      const normalizedCandidates = Array.isArray(data.candidates)
+        ? data.candidates.map(c => normalizeProductResult(c, 'Visão Computacional (Gemini AI)'))
+        : [normalized]
+
+      return {
+        ...data,
+        found: true,
+        product: normalized,
+        exactMatch: Boolean(data.exactMatch ?? (normalizedCandidates.length === 1)),
+        candidates: normalizedCandidates
+      }
+    }
     return data
   } catch (err) {
     console.error('Erro na identificação por fotografia:', err)
@@ -266,3 +284,81 @@ export async function confirmProductPhotoMatch(matchData) {
     return { success: false, error: err.message }
   }
 }
+
+// Identifica e estrutura dados do produto por descrição textual utilizando IA Gemini
+export async function fetchProductByDescription(descriptionText) {
+  const clean = (descriptionText || '').trim()
+  if (!clean || clean.length < 3) {
+    return {
+      success: false,
+      error: 'Por favor, informe ao menos 3 caracteres da descrição do produto.'
+    }
+  }
+
+  try {
+    const res = await fetch('/api/barcode/identify-text', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ queryText: clean })
+    })
+
+    const data = await res.json()
+    if (data.success && (data.data || (data.candidates && data.candidates.length > 0))) {
+      const rawProduct = data.data || data.candidates[0]
+      const normalized = normalizeProductResult(rawProduct, 'Inteligência Artificial (Gemini AI)')
+
+      const normalizedCandidates = Array.isArray(data.candidates)
+        ? data.candidates.map(c => normalizeProductResult(c, 'Inteligência Artificial (Gemini AI)'))
+        : [normalized]
+
+      return {
+        success: true,
+        found: true,
+        product: normalized,
+        exactMatch: Boolean(data.exactMatch ?? (normalizedCandidates.length === 1)),
+        candidates: normalizedCandidates,
+        cacheHit: Boolean(data.cacheHit)
+      }
+    }
+
+    return {
+      success: false,
+      found: false,
+      error: data.error || 'Não foi possível estruturar o produto a partir da descrição.'
+    }
+  } catch (err) {
+    console.error('Erro na identificação por descrição:', err)
+    return {
+      success: false,
+      found: false,
+      error: 'Falha de conexão com o serviço de identificação inteligente.'
+    }
+  }
+}
+
+// Busca imagens de alta resolução na web para o produto
+export async function searchProductImagesWeb(query) {
+  const clean = (query || '').trim()
+  if (!clean || clean.length < 2) return []
+
+  try {
+    const res = await fetch('/api/products/search-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: clean })
+    })
+
+    const data = await res.json()
+    if (data.success && Array.isArray(data.images)) {
+      return data.images
+    }
+    return []
+  } catch (err) {
+    console.error('Erro ao buscar fotos na web:', err)
+    return []
+  }
+}
+
+

@@ -5,7 +5,7 @@ import {
   Shield, KeyRound, User, Users, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
   Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
   MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase, CreditCard,
-  Check, Bell, Download, FileSpreadsheet
+  Check, Bell, Download, FileSpreadsheet, Star, Flame, ShoppingBag
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient'
@@ -100,8 +100,8 @@ export default function AdminDashboard() {
   const {
     showAdminDashboard, setShowAdminDashboard,
     products, orders, customers = [], logoutAdmin,
-    addProduct, updateProduct, deleteProduct, clearAllProducts,
-    updateOrderStatus, deleteOrder, loadAdminOrders, setShowScanner, showToast,
+    addProduct, updateProduct, deleteProduct,
+    updateOrderStatus, deleteOrder, loadAdminOrders, showScanner, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
     globalTaxRate, updateGlobalTaxRate,
     openTrackingModal,
@@ -140,8 +140,6 @@ export default function AdminDashboard() {
   const [labelOrderToPrint, setLabelOrderToPrint] = useState(null)
   const [productToDelete, setProductToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [showClearCatalogModal, setShowClearCatalogModal] = useState(false)
-  const [isClearingCatalog, setIsClearingCatalog] = useState(false)
   const [orderToEditTracking, setOrderToEditTracking] = useState(null)
   const [trackingCodeInput, setTrackingCodeInput] = useState('')
   const [productSearch, setProductSearch] = useState('')
@@ -149,6 +147,13 @@ export default function AdminDashboard() {
   // Filtros avançados na gestão de pedidos
   const [orderStatusFilter, setOrderStatusFilter] = useState('all')
   const [orderSearch, setOrderSearch] = useState('')
+
+  // Modal inteligente de busca de fotos na Web / Google
+  const [showImageSearchModal, setShowImageSearchModal] = useState(false)
+  const [imageSearchTarget, setImageSearchTarget] = useState(null) // 'new' | 'edit'
+  const [imageSearchQuery, setImageSearchQuery] = useState('')
+  const [imageSearchResults, setImageSearchResults] = useState([])
+  const [isSearchingImages, setIsSearchingImages] = useState(false)
 
   // Impressão de Etiquetas dos Correios em Lote
   const [selectedOrderIds, setSelectedOrderIds] = useState([])
@@ -369,6 +374,11 @@ export default function AdminDashboard() {
     image_alt: '',
     primary_keyword: '',
     mpn: '',
+    partNumber: '',
+    model: '',
+    ncm: '',
+    weight: '',
+    dimensions: '',
     google_category: '',
     is_anchor: false,
     weekly_offer: false,
@@ -585,7 +595,9 @@ export default function AdminDashboard() {
     if (!showAdminDashboard) return
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        if (orderToEditTracking) {
+        if (showScanner) {
+          setShowScanner(false)
+        } else if (orderToEditTracking) {
           setOrderToEditTracking(null)
         } else if (productToDelete) {
           setProductToDelete(null)
@@ -602,7 +614,7 @@ export default function AdminDashboard() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showAdminDashboard, orderToEditTracking, productToDelete, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
+  }, [showAdminDashboard, showScanner, setShowScanner, orderToEditTracking, productToDelete, labelOrderToPrint, labelProduct, editingProduct, setShowAdminDashboard])
 
   // Stats e filtros memoizados no topo incondicional (Rules of Hooks)
   const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + (o.total || 0), 0), [orders])
@@ -720,6 +732,84 @@ export default function AdminDashboard() {
     }
   }
 
+  // --- Handlers de Busca Inteligente de Fotos na Web ---
+  const handleOpenImageSearch = (targetType) => {
+    setImageSearchTarget(targetType)
+    const product = targetType === 'edit' ? editingProduct : newProduct
+    // Prioriza o nome do produto ou marca + modelo de forma concisa e natural
+    let initialQuery = ''
+    if (product?.name) {
+      initialQuery = product.name
+    } else {
+      initialQuery = [product?.brand, product?.model, product?.partNumber].filter(Boolean).join(' ')
+    }
+
+    const clean = (initialQuery || '')
+      .replace(/["'()[\]{}#*]/g, ' ')
+      .replace(/[,;:]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    setImageSearchQuery(clean)
+    setShowImageSearchModal(true)
+    setImageSearchResults([])
+
+    if (clean) {
+      handleExecuteImageSearch(clean)
+    }
+  }
+
+  const handleExecuteImageSearch = async (customQuery) => {
+    const q = (customQuery || imageSearchQuery || '').trim()
+    if (!q) return
+    setIsSearchingImages(true)
+    setImageSearchResults([])
+    try {
+      const res = await fetch('/api/products/search-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q })
+      })
+      const data = await res.json()
+      if (data.success && Array.isArray(data.images)) {
+        setImageSearchResults(data.images)
+        if (data.images.length === 0) {
+          showToast('Nenhuma foto encontrada para este termo. Tente simplificar a busca.', 'error')
+        }
+      } else {
+        showToast(data.error || 'Nenhuma foto encontrada.', 'error')
+      }
+    } catch (err) {
+      console.error('Erro de busca de fotos:', err)
+      showToast('Erro ao buscar imagens na web.', 'error')
+    } finally {
+      setIsSearchingImages(false)
+    }
+  }
+
+  const handleApplyFoundImage = (imgUrl, asPrimary = true) => {
+    if (imageSearchTarget === 'edit' && editingProduct) {
+      let currentImages = Array.isArray(editingProduct.images) ? [...editingProduct.images] : []
+      if (asPrimary) {
+        currentImages = [imgUrl, ...currentImages.filter(i => i !== imgUrl && !i.includes('unsplash.com'))]
+      } else {
+        currentImages.push(imgUrl)
+      }
+      setEditingProduct({ ...editingProduct, images: currentImages })
+      showToast('Foto do produto atualizada com sucesso! 📸✨')
+    } else if (imageSearchTarget === 'new') {
+      let currentImages = Array.isArray(newProduct.images) ? [...newProduct.images] : []
+      if (asPrimary) {
+        currentImages = [imgUrl, ...currentImages.filter(i => i !== imgUrl && !i.includes('unsplash.com'))]
+      } else {
+        currentImages.push(imgUrl)
+      }
+      setNewProduct({ ...newProduct, images: currentImages })
+      showToast('Foto adicionada ao produto com sucesso! 📸✨')
+    }
+    setShowImageSearchModal(false)
+  }
+
   if (!showAdminDashboard) return null
 
   // Auto price calculation formula: Custo * (1 + Imposto%) * (1 + Margem%) com arredondamento comercial (final 5 ou 9)
@@ -821,13 +911,19 @@ export default function AdminDashboard() {
       description: newProduct.description.trim(),
       images: newProduct.images.filter(img => img.trim().length > 0),
       specs: newProduct.specs.filter(s => s.label.trim() && s.value.trim()),
+      // Campos Técnicos e Fiscais
+      ncm: newProduct.ncm?.trim() || '',
+      partNumber: newProduct.partNumber?.trim() || newProduct.mpn?.trim() || '',
+      model: newProduct.model?.trim() || '',
+      weight: newProduct.weight?.trim() || '',
+      dimensions: newProduct.dimensions?.trim() || '',
       // Campos de SEO & Divulgação Orgânica
       slug: newProduct.slug ? slugify(newProduct.slug) : slugify(newProduct.name),
       seo_title: newProduct.seo_title?.trim() || newProduct.name.trim(),
       seo_description: newProduct.seo_description?.trim() || newProduct.description?.trim() || '',
       image_alt: newProduct.image_alt?.trim() || newProduct.name.trim(),
       primary_keyword: newProduct.primary_keyword?.trim() || '',
-      mpn: newProduct.mpn?.trim() || '',
+      mpn: newProduct.mpn?.trim() || newProduct.partNumber?.trim() || '',
       google_category: newProduct.google_category?.trim() || '',
       is_anchor: Boolean(newProduct.is_anchor),
       weekly_offer: Boolean(newProduct.weekly_offer),
@@ -855,6 +951,11 @@ export default function AdminDashboard() {
       image_alt: '',
       primary_keyword: '',
       mpn: '',
+      partNumber: '',
+      model: '',
+      ncm: '',
+      weight: '',
+      dimensions: '',
       google_category: '',
       is_anchor: false,
       weekly_offer: false,
@@ -868,12 +969,17 @@ export default function AdminDashboard() {
   const handleStartEdit = (product) => {
     setEditingProduct({
       ...product,
+      ncm: product.ncm || '',
+      partNumber: product.partNumber || product.mpn || '',
+      model: product.model || '',
+      weight: product.weight || '',
+      dimensions: product.dimensions || '',
       slug: product.slug || slugify(product.name),
       seo_title: product.seo_title || product.name,
       seo_description: product.seo_description || product.description || '',
       image_alt: product.image_alt || product.name,
       primary_keyword: product.primary_keyword || '',
-      mpn: product.mpn || '',
+      mpn: product.mpn || product.partNumber || '',
       google_category: product.google_category || '',
       is_anchor: Boolean(product.is_anchor),
       weekly_offer: Boolean(product.weekly_offer),
@@ -908,13 +1014,19 @@ export default function AdminDashboard() {
       description: editingProduct.description?.trim() || '',
       images: editingProduct.images.filter(img => img.trim().length > 0),
       specs: editingProduct.specs.filter(s => s.label.trim() && s.value.trim()),
+      // Campos Técnicos e Fiscais
+      ncm: editingProduct.ncm?.trim() || '',
+      partNumber: editingProduct.partNumber?.trim() || editingProduct.mpn?.trim() || '',
+      model: editingProduct.model?.trim() || '',
+      weight: editingProduct.weight?.trim() || '',
+      dimensions: editingProduct.dimensions?.trim() || '',
       // Campos de SEO & Divulgação Orgânica
       slug: editingProduct.slug ? slugify(editingProduct.slug) : slugify(editingProduct.name),
       seo_title: editingProduct.seo_title?.trim() || editingProduct.name.trim(),
       seo_description: editingProduct.seo_description?.trim() || editingProduct.description?.trim() || '',
       image_alt: editingProduct.image_alt?.trim() || editingProduct.name.trim(),
       primary_keyword: editingProduct.primary_keyword?.trim() || '',
-      mpn: editingProduct.mpn?.trim() || '',
+      mpn: editingProduct.mpn?.trim() || editingProduct.partNumber?.trim() || '',
       google_category: editingProduct.google_category?.trim() || '',
       is_anchor: Boolean(editingProduct.is_anchor),
       weekly_offer: Boolean(editingProduct.weekly_offer),
@@ -974,9 +1086,10 @@ export default function AdminDashboard() {
       <div className="adm-editor-grid">
         {/* Section 1: Basic Info */}
         <div className="adm-editor-section">
-          <h4 className="adm-section-title"><Package size={16} /> Informações Básicas</h4>
-          <div className="ck-form-grid">
-            <div className="ck-field ck-field-full">
+          <h4 className="adm-section-title"><Package size={16} /> Dados Cadastrais</h4>
+          <div className="adm-form-grid">
+            {/* Row 1: Nome (8) + Marca (4) */}
+            <div className="adm-field adm-col-8">
               <label>Nome do Produto *</label>
               <input
                 className="input-field"
@@ -985,7 +1098,7 @@ export default function AdminDashboard() {
                 placeholder="Ex: Monitor Gamer 27 165Hz IPS"
               />
             </div>
-            <div className="ck-field">
+            <div className="adm-field adm-col-4">
               <label>Marca / Fabricante *</label>
               <input
                 className="input-field"
@@ -996,7 +1109,9 @@ export default function AdminDashboard() {
                 autoComplete="off"
               />
             </div>
-            <div className="ck-field">
+
+            {/* Row 2: Categoria (4) + Modelo (4) + P/N (4) */}
+            <div className="adm-field adm-col-4">
               <label>Categoria / Departamento *</label>
               <select
                 className="input-field"
@@ -1017,7 +1132,27 @@ export default function AdminDashboard() {
                 <option>Outros</option>
               </select>
             </div>
-            <div className="ck-field">
+            <div className="adm-field adm-col-4">
+              <label>Modelo do Produto</label>
+              <input
+                className="input-field"
+                value={newProduct.model || ''}
+                onChange={e => setNewProduct({ ...newProduct, model: e.target.value })}
+                placeholder="Ex: MI42S, Inspiron 15"
+              />
+            </div>
+            <div className="adm-field adm-col-4">
+              <label>Part Number (P/N) / MPN</label>
+              <input
+                className="input-field"
+                value={newProduct.partNumber || ''}
+                onChange={e => setNewProduct({ ...newProduct, partNumber: e.target.value, mpn: e.target.value })}
+                placeholder="Ex: 946521503, MK270"
+              />
+            </div>
+
+            {/* Row 3: EAN-13 (4) + NCM (3) + Estoque (2) + Peso (3) */}
+            <div className="adm-field adm-col-4">
               <label>Código EAN-13 / Barras</label>
               <div style={{ display: 'flex', gap: 6 }}>
                 <input
@@ -1025,10 +1160,12 @@ export default function AdminDashboard() {
                   value={newProduct.ean}
                   onChange={e => setNewProduct({ ...newProduct, ean: e.target.value })}
                   placeholder="7891234567890"
+                  style={{ flex: 1 }}
                 />
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
+                  style={{ height: 38, padding: '0 10px', flexShrink: 0 }}
                   onClick={() => {
                     const autoEan = generateValidEan13('789')
                     setNewProduct({ ...newProduct, ean: autoEan })
@@ -1040,8 +1177,17 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
-            <div className="ck-field">
-              <label>Quantidade em Estoque *</label>
+            <div className="adm-field adm-col-3">
+              <label>Classificação Fiscal (NCM)</label>
+              <input
+                className="input-field"
+                value={newProduct.ncm || ''}
+                onChange={e => setNewProduct({ ...newProduct, ncm: e.target.value })}
+                placeholder="Ex: 8516.50.00"
+              />
+            </div>
+            <div className="adm-field adm-col-2">
+              <label>Estoque *</label>
               <input
                 className="input-field"
                 type="number"
@@ -1051,8 +1197,28 @@ export default function AdminDashboard() {
                 placeholder="0"
               />
             </div>
-            <div className="ck-field ck-field-full">
-              <label className="adm-checkbox-label">
+            <div className="adm-field adm-col-3">
+              <label>Peso Estimado</label>
+              <input
+                className="input-field"
+                value={newProduct.weight || ''}
+                onChange={e => setNewProduct({ ...newProduct, weight: e.target.value })}
+                placeholder="Ex: 14.500 kg ou 450g"
+              />
+            </div>
+
+            {/* Row 4: Dimensões (5) + Destaque (7) */}
+            <div className="adm-field adm-col-5">
+              <label>Dimensões (CxLxA)</label>
+              <input
+                className="input-field"
+                value={newProduct.dimensions || ''}
+                onChange={e => setNewProduct({ ...newProduct, dimensions: e.target.value })}
+                placeholder="Ex: 54x32x42 cm"
+              />
+            </div>
+            <div className="adm-col-7">
+              <label className="adm-checkbox-card">
                 <input
                   type="checkbox"
                   checked={newProduct.featured}
@@ -1066,9 +1232,10 @@ export default function AdminDashboard() {
 
         {/* Section 2: Pricing */}
         <div className="adm-editor-section">
-          <h4 className="adm-section-title"><DollarSign size={16} /> Precificação & Lucratividade</h4>
-          <div className="ck-form-grid">
-            <div className="ck-field">
+          <h4 className="adm-section-title"><DollarSign size={16} /> Precificação & Custos</h4>
+          <div className="adm-form-grid">
+            {/* Row 1: Custo (3) + Imposto (3) + Margem (3) + Preço Final (3) */}
+            <div className="adm-field adm-col-3">
               <label>💰 Preço de Custo (R$) *</label>
               <input
                 className="input-field"
@@ -1079,10 +1246,10 @@ export default function AdminDashboard() {
                 placeholder="0.00"
               />
             </div>
-            <div className="ck-field">
-              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="adm-field adm-col-3">
+              <label>
                 <span>Alíquota / Imposto (%) *</span>
-                <span className="badge badge-lime" style={{ fontSize: 10 }}>Padrão Global: {globalTaxRate}%</span>
+                <span className="badge badge-lime" style={{ fontSize: 10, padding: '1px 6px' }}>Padrão: {globalTaxRate}%</span>
               </label>
               <input
                 className="input-field"
@@ -1093,8 +1260,8 @@ export default function AdminDashboard() {
                 required
               />
             </div>
-            <div className="ck-field">
-              <label>📈 Margem de Lucro Desejada (%)</label>
+            <div className="adm-field adm-col-3">
+              <label>📈 Margem Lucro Desejada (%)</label>
               <input
                 className="input-field"
                 type="number"
@@ -1103,7 +1270,7 @@ export default function AdminDashboard() {
                 onChange={e => handleNewMarginChange(e.target.value)}
               />
             </div>
-            <div className="ck-field">
+            <div className="adm-field adm-col-3">
               <label>🏷️ Preço de Venda Final (R$) *</label>
               <input
                 className="input-field"
@@ -1114,7 +1281,9 @@ export default function AdminDashboard() {
                 placeholder="Calculado automaticamente"
               />
             </div>
-            <div className="ck-field">
+
+            {/* Row 2: Preço De (4) + Lucro Unitário / Sugestão (8) */}
+            <div className="adm-field adm-col-4">
               <label>Preço "De" Riscado (R$)</label>
               <input
                 className="input-field"
@@ -1125,10 +1294,21 @@ export default function AdminDashboard() {
                 placeholder="Para simular promoção"
               />
             </div>
-            <div className="ck-field">
-              <label>Sugestão Calculada:</label>
-              <div className="adm-auto-price">
-                R$ {calcSellPrice(newProduct.costPrice, newProduct.taxRate, newProduct.marginRate).toFixed(2).replace('.', ',')}
+            <div className="adm-field adm-col-8">
+              <label>Sugestão Calculada & Margem Bruta Estimada</label>
+              <div className="adm-profit-badge">
+                <div className="adm-profit-item">
+                  <span className="adm-profit-label">Sugerido:</span>
+                  <span className="adm-profit-val" style={{ color: 'var(--primary-dark)' }}>
+                    R$ {calcSellPrice(newProduct.costPrice, newProduct.taxRate, newProduct.marginRate).toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+                <div className="adm-profit-item">
+                  <span className="adm-profit-label">Margem Bruta:</span>
+                  <span className="adm-profit-val text-success">
+                    + R$ {Math.max(0, (parseFloat(newProduct.price || calcSellPrice(newProduct.costPrice, newProduct.taxRate, newProduct.marginRate)) || 0) - (parseFloat(newProduct.costPrice) || 0)).toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1153,13 +1333,23 @@ export default function AdminDashboard() {
         <div className="adm-editor-section">
           <div className="adm-section-header-flex">
             <h4 className="adm-section-title"><ImageIcon size={16} /> Galeria de Fotos (URLs)</h4>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setNewProduct({ ...newProduct, images: [...newProduct.images, ''] })}
-            >
-              <Plus size={14} /> Adicionar Foto
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                style={{ color: 'var(--lime-dark)', borderColor: 'rgba(132, 204, 22, 0.5)', background: 'var(--lime-glow)', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                onClick={() => handleOpenImageSearch('new')}
+              >
+                <Search size={14} /> Buscar Fotos na Web
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setNewProduct({ ...newProduct, images: [...newProduct.images, ''] })}
+              >
+                <Plus size={14} /> Adicionar Manual
+              </button>
+            </div>
           </div>
 
           <div className="adm-images-list">
@@ -1177,7 +1367,7 @@ export default function AdminDashboard() {
                   }}
                 />
                 {img && (
-                  <img src={img} alt="Preview" className="adm-img-preview" />
+                  <img src={img} alt="Preview" referrerPolicy="no-referrer" className="adm-img-preview" />
                 )}
                 {newProduct.images.length > 1 && (
                   <button
@@ -1336,35 +1526,53 @@ export default function AdminDashboard() {
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 8 }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            <div className="adm-seo-toggles-grid">
+              <label className={`adm-toggle-card ${newProduct.is_anchor ? 'active-amber' : ''}`}>
                 <input
                   type="checkbox"
                   checked={newProduct.is_anchor}
                   onChange={e => setNewProduct({ ...newProduct, is_anchor: e.target.checked })}
-                  style={{ width: 16, height: 16, accentColor: 'var(--amber)' }}
+                  style={{ accentColor: 'var(--amber)' }}
                 />
-                ⭐ Produto-Âncora (Destaque SEO)
+                <div className="adm-toggle-card-info">
+                  <div className="adm-toggle-card-title">
+                    <Star size={15} style={{ color: 'var(--amber)' }} />
+                    <span>Produto-Âncora</span>
+                  </div>
+                  <p className="adm-toggle-card-desc">Destaque prioritário de SEO no Google</p>
+                </div>
               </label>
 
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              <label className={`adm-toggle-card ${newProduct.weekly_offer ? 'active-red' : ''}`}>
                 <input
                   type="checkbox"
                   checked={newProduct.weekly_offer}
                   onChange={e => setNewProduct({ ...newProduct, weekly_offer: e.target.checked })}
-                  style={{ width: 16, height: 16, accentColor: 'var(--red)' }}
+                  style={{ accentColor: 'var(--red)' }}
                 />
-                🔥 Oferta da Semana
+                <div className="adm-toggle-card-info">
+                  <div className="adm-toggle-card-title">
+                    <Flame size={15} style={{ color: 'var(--red)' }} />
+                    <span>Oferta da Semana</span>
+                  </div>
+                  <p className="adm-toggle-card-desc">Selo de promoção ativa na vitrine</p>
+                </div>
               </label>
 
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              <label className={`adm-toggle-card ${newProduct.merchant_include ? 'active-green' : ''}`}>
                 <input
                   type="checkbox"
                   checked={newProduct.merchant_include}
                   onChange={e => setNewProduct({ ...newProduct, merchant_include: e.target.checked })}
-                  style={{ width: 16, height: 16, accentColor: '#15803d' }}
+                  style={{ accentColor: 'var(--lime-dark)' }}
                 />
-                🛒 Incluir no Google Merchant Center
+                <div className="adm-toggle-card-info">
+                  <div className="adm-toggle-card-title">
+                    <ShoppingBag size={15} style={{ color: 'var(--lime-dark)' }} />
+                    <span>Google Shopping</span>
+                  </div>
+                  <p className="adm-toggle-card-desc">Incluir no feed do Google Merchant</p>
+                </div>
               </label>
             </div>
           </div>
@@ -1374,29 +1582,44 @@ export default function AdminDashboard() {
       <div className="adm-editor-actions">
         <button
           type="button"
-          className="btn btn-primary btn-lg"
+          className="btn btn-primary"
+          style={{ height: 38, padding: '0 20px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={handleAddProduct}
           disabled={!newProduct.name || !newProduct.costPrice}
         >
-          <Plus size={18} /> Cadastrar Produto no Catálogo
+          <Plus size={16} /> Cadastrar Produto no Catálogo
         </button>
       </div>
     </div>
   )
 
+  const hasSubModalOpen = Boolean(
+    editingProduct ||
+    productToDelete ||
+    showScanner ||
+    showImageSearchModal ||
+    orderToEditTracking ||
+    labelOrderToPrint ||
+    labelProduct ||
+    (batchOrdersToPrint && batchOrdersToPrint.length > 0) ||
+    showSetupWizard
+  )
+
   return (
     <div className="overlay">
-      <button
-        className="modal-close-floating"
-        onClick={(e) => {
-          e.stopPropagation()
-          setShowAdminDashboard(false)
-        }}
-        title="Fechar Painel e Voltar à Loja"
-        aria-label="Fechar Janela"
-      >
-        <X size={22} />
-      </button>
+      {!hasSubModalOpen && (
+        <button
+          className="modal-close-floating"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowAdminDashboard(false)
+          }}
+          title="Fechar Painel e Voltar à Loja"
+          aria-label="Fechar Janela"
+        >
+          <X size={22} />
+        </button>
+      )}
 
       <div className="modal modal-admin" style={{ maxWidth: '1280px', width: '96vw', maxHeight: '95vh' }} onClick={e => e.stopPropagation()}>
 
@@ -1411,31 +1634,6 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="adm-header-actions">
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setShowSetupWizard(true)}
-              style={{
-                borderColor: 'var(--lime)',
-                color: 'var(--lime-dark)',
-                background: 'var(--lime-glow)',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-              title="Abrir Assistente de Configuração Rápida em 3 Passos (White-Label)"
-            >
-              <Sparkles size={15} /> Setup Wizard
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => { setShowScanner(true); setShowAdminDashboard(false) }}
-              title="Abrir scanner de código de barras"
-            >
-              <Camera size={16} /> Scanner
-            </button>
             <button
               type="button"
               className="btn btn-outline btn-sm"
@@ -1633,6 +1831,23 @@ export default function AdminDashboard() {
                   >
                     <Plus size={16} /> Cadastrar Produto
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setShowScanner(true)}
+                    style={{
+                      borderColor: 'var(--lime)',
+                      color: 'var(--lime-dark)',
+                      background: 'var(--lime-glow)',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                    title="Identificar e cadastrar produto por código de barras ou descrição com IA"
+                  >
+                    <Camera size={16} /> Scanner / IA
+                  </button>
                   {products.length > 0 && productViewMode === 'list' && (
                     <>
                       <button
@@ -1673,16 +1888,6 @@ export default function AdminDashboard() {
                         style={{ fontSize: '11px', color: 'var(--dark-500)', textDecoration: 'underline' }}
                       >
                         Modelo CSV
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        onClick={() => setShowClearCatalogModal(true)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: 'var(--red)', color: 'var(--red)' }}
-                        title="Apagar todos os produtos do catálogo e do banco de dados"
-                      >
-                        <Trash2 size={14} /> Zerar Catálogo
                       </button>
                     </>
                   )}
@@ -1750,7 +1955,13 @@ export default function AdminDashboard() {
                               />
                               <div>
                                 <strong style={{ fontSize: 'var(--text-sm)', display: 'block' }}>{p.name}</strong>
-                                {p.ean && <span style={{ fontSize: '11px', color: 'var(--dark-400)', fontFamily: 'monospace' }}>EAN: {p.ean}</span>}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '3px', alignItems: 'center' }}>
+                                  {p.ean && <span style={{ fontSize: '11px', color: 'var(--dark-400)', fontFamily: 'monospace' }}>EAN: {p.ean}</span>}
+                                  {p.ncm && <span className="badge" style={{ fontSize: '10px', padding: '1px 5px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>NCM: {p.ncm}</span>}
+                                  {(p.partNumber || p.mpn) && <span className="badge" style={{ fontSize: '10px', padding: '1px 5px', background: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>P/N: {p.partNumber || p.mpn}</span>}
+                                  {p.model && <span className="badge" style={{ fontSize: '10px', padding: '1px 5px', background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' }}>Mod: {p.model}</span>}
+                                  {p.weight && <span className="badge" style={{ fontSize: '10px', padding: '1px 5px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>⚖️ {p.weight}</span>}
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -2474,7 +2685,7 @@ export default function AdminDashboard() {
           {/* Company Data Tab */}
           {tab === 'company' && (
             <div className="adm-editor-form">
-              <div className="adm-editor-header">
+              <div className="adm-editor-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--lime-glow)', color: 'var(--lime-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Building2 size={20} />
@@ -2486,6 +2697,24 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setShowSetupWizard(true)}
+                  style={{
+                    borderColor: 'var(--lime)',
+                    color: 'var(--lime-dark)',
+                    background: 'var(--lime-glow)',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Abrir Assistente de Configuração Rápida em 3 Passos (White-Label)"
+                >
+                  <Sparkles size={15} /> Assistente Setup Wizard
+                </button>
               </div>
 
               <form onSubmit={handleSaveCompany} className="adm-editor-grid">
@@ -3088,24 +3317,35 @@ export default function AdminDashboard() {
             MODAL COMPLETO DE EDIÇÃO DE PRODUTO
            ========================================================= */}
         {editingProduct && (
-          <div className="overlay" style={{ zIndex: 600 }}>
+          <div className="overlay" style={{ zIndex: 1100 }}>
             <div className="modal modal-lg adm-edit-modal">
               <div className="adm-edit-modal-header">
                 <div>
                   <span className="badge badge-lime" style={{ marginBottom: 6 }}>Modo Edição Completa</span>
                   <h2>Editar: {editingProduct.name}</h2>
                 </div>
-                <button className="modal-close" onClick={() => setEditingProduct(null)}>
+                <button
+                  type="button"
+                  className="adm-edit-close-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setEditingProduct(null)
+                  }}
+                  title="Fechar Modo Edição"
+                  aria-label="Fechar Modo Edição"
+                >
                   <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveEdit} className="adm-edit-modal-body">
-                {/* 1. Informações Básicas */}
+              <form onSubmit={handleSaveEdit} className="adm-edit-modal-form">
+                <div className="adm-edit-modal-body">
+                  {/* 1. Informações Básicas */}
                 <div className="adm-editor-section">
                   <h4 className="adm-section-title"><Package size={16} /> Dados Cadastrais</h4>
-                  <div className="ck-form-grid">
-                    <div className="ck-field ck-field-full">
+                  <div className="adm-form-grid">
+                    {/* Row 1: Nome (8) + Marca (4) */}
+                    <div className="adm-field adm-col-8">
                       <label>Nome do Produto *</label>
                       <input
                         className="input-field"
@@ -3114,7 +3354,7 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
+                    <div className="adm-field adm-col-4">
                       <label>Marca / Fabricante *</label>
                       <input
                         className="input-field"
@@ -3126,7 +3366,9 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
+
+                    {/* Row 2: Categoria (4) + Modelo (4) + P/N (4) */}
+                    <div className="adm-field adm-col-4">
                       <label>Categoria / Departamento *</label>
                       <select
                         className="input-field"
@@ -3147,7 +3389,27 @@ export default function AdminDashboard() {
                         <option>Outros</option>
                       </select>
                     </div>
-                    <div className="ck-field">
+                    <div className="adm-field adm-col-4">
+                      <label>Modelo do Produto</label>
+                      <input
+                        className="input-field"
+                        value={editingProduct.model || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, model: e.target.value })}
+                        placeholder="Ex: MI42S, Inspiron 15"
+                      />
+                    </div>
+                    <div className="adm-field adm-col-4">
+                      <label>Part Number (P/N) / MPN</label>
+                      <input
+                        className="input-field"
+                        value={editingProduct.partNumber || editingProduct.mpn || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, partNumber: e.target.value, mpn: e.target.value })}
+                        placeholder="Ex: 946521503, MK270"
+                      />
+                    </div>
+
+                    {/* Row 3: EAN-13 (4) + NCM (3) + Estoque (2) + Peso (3) */}
+                    <div className="adm-field adm-col-4">
                       <label>Código EAN-13 / Barras</label>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <input
@@ -3155,10 +3417,12 @@ export default function AdminDashboard() {
                           value={editingProduct.ean || ''}
                           onChange={e => setEditingProduct({ ...editingProduct, ean: e.target.value })}
                           placeholder="7891234567890"
+                          style={{ flex: 1 }}
                         />
                         <button
                           type="button"
                           className="btn btn-outline btn-sm"
+                          style={{ height: 38, padding: '0 10px', flexShrink: 0 }}
                           onClick={() => {
                             const autoEan = generateValidEan13('789')
                             setEditingProduct({ ...editingProduct, ean: autoEan })
@@ -3170,8 +3434,17 @@ export default function AdminDashboard() {
                         </button>
                       </div>
                     </div>
-                    <div className="ck-field">
-                      <label>Estoque Atual (unidades) *</label>
+                    <div className="adm-field adm-col-3">
+                      <label>Classificação Fiscal (NCM)</label>
+                      <input
+                        className="input-field"
+                        value={editingProduct.ncm || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, ncm: e.target.value })}
+                        placeholder="Ex: 8516.50.00"
+                      />
+                    </div>
+                    <div className="adm-field adm-col-2">
+                      <label>Estoque *</label>
                       <input
                         className="input-field"
                         type="number"
@@ -3181,8 +3454,28 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field ck-field-full">
-                      <label className="adm-checkbox-label">
+                    <div className="adm-field adm-col-3">
+                      <label>Peso Estimado</label>
+                      <input
+                        className="input-field"
+                        value={editingProduct.weight || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, weight: e.target.value })}
+                        placeholder="Ex: 14.500 kg ou 450g"
+                      />
+                    </div>
+
+                    {/* Row 4: Dimensões (5) + Destaque (7) */}
+                    <div className="adm-field adm-col-5">
+                      <label>Dimensões (CxLxA)</label>
+                      <input
+                        className="input-field"
+                        value={editingProduct.dimensions || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, dimensions: e.target.value })}
+                        placeholder="Ex: 54x32x42 cm"
+                      />
+                    </div>
+                    <div className="adm-col-7">
+                      <label className="adm-checkbox-card">
                         <input
                           type="checkbox"
                           checked={editingProduct.featured || false}
@@ -3194,7 +3487,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* 2. Preços & Margens */}
+                {/* 2. Preços & Custos */}
                 <div className="adm-editor-section">
                   <div className="adm-section-header-flex">
                     <h4 className="adm-section-title"><DollarSign size={16} /> Precificação & Custos</h4>
@@ -3216,8 +3509,9 @@ export default function AdminDashboard() {
                       <RefreshCw size={14} /> Recalcular Preço
                     </button>
                   </div>
-                  <div className="ck-form-grid">
-                    <div className="ck-field">
+                  <div className="adm-form-grid">
+                    {/* Row 1: Custo (3) + Alíquota (3) + Margem (3) + Preço Venda (3) */}
+                    <div className="adm-field adm-col-3">
                       <label>Preço de Custo (R$) *</label>
                       <input
                         className="input-field"
@@ -3228,10 +3522,10 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
-                      <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="adm-field adm-col-3">
+                      <label>
                         <span>Alíquota / Impostos (%)</span>
-                        <span className="badge badge-lime" style={{ fontSize: 10 }}>Padrão Global: {globalTaxRate}%</span>
+                        <span className="badge badge-lime" style={{ fontSize: 10, padding: '1px 6px' }}>Padrão: {globalTaxRate}%</span>
                       </label>
                       <input
                         className="input-field"
@@ -3241,7 +3535,7 @@ export default function AdminDashboard() {
                         onChange={e => handleEditTaxChange(e.target.value)}
                       />
                     </div>
-                    <div className="ck-field">
+                    <div className="adm-field adm-col-3">
                       <label>Margem de Lucro (%)</label>
                       <input
                         className="input-field"
@@ -3251,8 +3545,8 @@ export default function AdminDashboard() {
                         onChange={e => handleEditMarginChange(e.target.value)}
                       />
                     </div>
-                    <div className="ck-field">
-                      <label>Preço de Venda ao Cliente (R$) *</label>
+                    <div className="adm-field adm-col-3">
+                      <label>Preço de Venda Final (R$) *</label>
                       <input
                         className="input-field"
                         type="number"
@@ -3262,7 +3556,9 @@ export default function AdminDashboard() {
                         required
                       />
                     </div>
-                    <div className="ck-field">
+
+                    {/* Row 2: Preço De (4) + Lucro Unitário / Margem (8) */}
+                    <div className="adm-field adm-col-4">
                       <label>Preço "De" Riscado (R$)</label>
                       <input
                         className="input-field"
@@ -3273,10 +3569,23 @@ export default function AdminDashboard() {
                         placeholder="Opcional: preço antigo"
                       />
                     </div>
-                    <div className="ck-field">
-                      <label>Margem Bruta Unitária Estimada:</label>
-                      <div className="adm-auto-price" style={{ fontSize: 'var(--text-sm)' }}>
-                        + R$ {Math.max(0, (parseFloat(editingProduct.price) || 0) - (parseFloat(editingProduct.costPrice) || 0)).toFixed(2).replace('.', ',')}
+                    <div className="adm-field adm-col-8">
+                      <label>Rentabilidade & Lucro Unitário Estimado</label>
+                      <div className="adm-profit-badge">
+                        <div className="adm-profit-item">
+                          <span className="adm-profit-label">Margem Bruta:</span>
+                          <span className="adm-profit-val text-success">
+                            + R$ {Math.max(0, (parseFloat(editingProduct.price) || 0) - (parseFloat(editingProduct.costPrice) || 0)).toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                        {parseFloat(editingProduct.costPrice) > 0 && parseFloat(editingProduct.price) > 0 && (
+                          <div className="adm-profit-item">
+                            <span className="adm-profit-label">Markup Real:</span>
+                            <span className="adm-profit-val">
+                              {(((parseFloat(editingProduct.price) / parseFloat(editingProduct.costPrice)) - 1) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3301,13 +3610,23 @@ export default function AdminDashboard() {
                 <div className="adm-editor-section">
                   <div className="adm-section-header-flex">
                     <h4 className="adm-section-title"><ImageIcon size={16} /> Fotos do Produto (URLs)</h4>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setEditingProduct({ ...editingProduct, images: [...editingProduct.images, ''] })}
-                    >
-                      <Plus size={14} /> Adicionar Foto
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        style={{ color: 'var(--lime-dark)', borderColor: 'rgba(132, 204, 22, 0.5)', background: 'var(--lime-glow)', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                        onClick={() => handleOpenImageSearch('edit')}
+                      >
+                        <Search size={14} /> Buscar Fotos na Web
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setEditingProduct({ ...editingProduct, images: [...editingProduct.images, ''] })}
+                      >
+                        <Plus size={14} /> Adicionar Manual
+                      </button>
+                    </div>
                   </div>
 
                   <div className="adm-images-list">
@@ -3325,7 +3644,7 @@ export default function AdminDashboard() {
                           }}
                         />
                         {img && (
-                          <img src={img} alt="Preview" className="adm-img-preview" />
+                          <img src={img} alt="Preview" referrerPolicy="no-referrer" className="adm-img-preview" />
                         )}
                         {editingProduct.images.length > 1 && (
                           <button
@@ -3487,66 +3806,84 @@ export default function AdminDashboard() {
                       />
                     </div>
 
-                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 8 }}>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                    <div className="adm-seo-toggles-grid">
+                      <label className={`adm-toggle-card ${editingProduct.is_anchor ? 'active-amber' : ''}`}>
                         <input
                           type="checkbox"
                           checked={editingProduct.is_anchor || false}
                           onChange={e => setEditingProduct({ ...editingProduct, is_anchor: e.target.checked })}
-                          style={{ width: 16, height: 16, accentColor: 'var(--amber)' }}
+                          style={{ accentColor: 'var(--amber)' }}
                         />
-                        ⭐ Produto-Âncora (Destaque SEO)
+                        <div className="adm-toggle-card-info">
+                          <div className="adm-toggle-card-title">
+                            <Star size={15} style={{ color: 'var(--amber)' }} />
+                            <span>Produto-Âncora</span>
+                          </div>
+                          <p className="adm-toggle-card-desc">Destaque prioritário de SEO no Google</p>
+                        </div>
                       </label>
 
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      <label className={`adm-toggle-card ${editingProduct.weekly_offer ? 'active-red' : ''}`}>
                         <input
                           type="checkbox"
                           checked={editingProduct.weekly_offer || false}
                           onChange={e => setEditingProduct({ ...editingProduct, weekly_offer: e.target.checked })}
-                          style={{ width: 16, height: 16, accentColor: 'var(--red)' }}
+                          style={{ accentColor: 'var(--red)' }}
                         />
-                        🔥 Oferta da Semana
+                        <div className="adm-toggle-card-info">
+                          <div className="adm-toggle-card-title">
+                            <Flame size={15} style={{ color: 'var(--red)' }} />
+                            <span>Oferta da Semana</span>
+                          </div>
+                          <p className="adm-toggle-card-desc">Selo de promoção ativa na vitrine</p>
+                        </div>
                       </label>
 
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                      <label className={`adm-toggle-card ${editingProduct.merchant_include !== false ? 'active-green' : ''}`}>
                         <input
                           type="checkbox"
                           checked={editingProduct.merchant_include !== false}
                           onChange={e => setEditingProduct({ ...editingProduct, merchant_include: e.target.checked })}
-                          style={{ width: 16, height: 16, accentColor: 'var(--lime)' }}
+                          style={{ accentColor: 'var(--lime-dark)' }}
                         />
-                        📦 Incluir no Feed do Google Shopping
+                        <div className="adm-toggle-card-info">
+                          <div className="adm-toggle-card-title">
+                            <ShoppingBag size={15} style={{ color: 'var(--lime-dark)' }} />
+                            <span>Google Shopping</span>
+                          </div>
+                          <p className="adm-toggle-card-desc">Incluir no feed do Google Merchant</p>
+                        </div>
                       </label>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Modal Footer Actions */}
-                <div className="adm-edit-modal-footer">
+              {/* Modal Footer Actions - Fixo/Flutuante no rodapé */}
+              <div className="adm-edit-modal-footer">
                   <button
                     type="button"
-                    className="btn btn-outline"
-                    style={{ color: 'var(--red)', borderColor: 'var(--red)', marginRight: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    className="btn btn-delete"
                     onClick={() => {
                       const target = editingProduct
                       setEditingProduct(null)
                       setProductToDelete(target)
                     }}
                   >
-                    <Trash2 size={16} /> Excluir Produto
+                    <Trash2 size={15} /> Excluir Produto
                   </button>
                   <button
                     type="button"
-                    className="btn btn-outline"
+                    className="btn btn-cancel"
                     onClick={() => setEditingProduct(null)}
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="btn btn-primary btn-lg"
+                    className="btn btn-save"
                   >
-                    <CheckCircle2 size={18} /> Salvar Todas as Alterações
+                    <CheckCircle2 size={16} /> Salvar Todas as Alterações
                   </button>
                 </div>
               </form>
@@ -3558,7 +3895,7 @@ export default function AdminDashboard() {
             MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE PRODUTO
            ========================================================= */}
         {productToDelete && (
-          <div className="overlay" style={{ zIndex: 750 }}>
+          <div className="overlay" style={{ zIndex: 1200 }}>
             <div className="modal" style={{ maxWidth: 440, textAlign: 'center', padding: 'var(--space-6)' }}>
               <div style={{
                 width: 56,
@@ -3581,6 +3918,7 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   className="btn btn-outline"
+                  style={{ height: 38, padding: '0 18px', fontSize: 13, borderRadius: 'var(--radius-md)' }}
                   disabled={isDeleting}
                   onClick={() => setProductToDelete(null)}
                 >
@@ -3588,9 +3926,9 @@ export default function AdminDashboard() {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-sm"
+                  className="btn"
                   disabled={isDeleting}
-                  style={{ background: 'var(--red)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  style={{ background: 'var(--red)', color: '#fff', border: 'none', height: 38, padding: '0 18px', fontSize: 13, borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   onClick={async () => {
                     setIsDeleting(true)
                     try {
@@ -3602,7 +3940,7 @@ export default function AdminDashboard() {
                     }
                   }}
                 >
-                  <Trash2 size={16} /> Sim, Excluir Produto
+                  <Trash2 size={15} /> Sim, Excluir Produto
                 </button>
               </div>
             </div>
@@ -3610,64 +3948,133 @@ export default function AdminDashboard() {
         )}
 
         {/* =========================================================
-            MODAL DE CONFIRMAÇÃO DE ZERAR CATÁLOGO COMPLETO
+            MODAL DE BUSCA INTELIGENTE DE FOTOS NA WEB
            ========================================================= */}
-        {showClearCatalogModal && (
-          <div className="overlay" style={{ zIndex: 760 }}>
-            <div className="modal" style={{ maxWidth: 460, textAlign: 'center', padding: 'var(--space-6)' }}>
-              <div style={{
-                width: 60,
-                height: 60,
-                borderRadius: '50%',
-                background: 'rgba(239, 68, 68, 0.12)',
-                color: 'var(--red)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto var(--space-4)'
-              }}>
-                <AlertTriangle size={32} />
-              </div>
-              <h3 style={{ marginBottom: 'var(--space-2)' }}>Zerar Todos os Produtos?</h3>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--dark-600)', marginBottom: 'var(--space-5)', lineHeight: 1.5 }}>
-                Esta ação vai remover permanentemente todos os <strong>{products.length} produtos</strong> do catálogo e do banco de dados na nuvem (Supabase). O catálogo ficará 100% zerado para você cadastrar seus novos produtos do zero.
-              </p>
-              <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center' }}>
+        {showImageSearchModal && (
+          <div className="overlay" style={{ zIndex: 1300 }}>
+            <div className="modal" style={{ maxWidth: 680, width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--dark-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--white)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--lime-glow)', color: 'var(--lime-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Search size={18} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 16, margin: 0, fontWeight: 700 }}>Buscar Fotos do Produto na Web</h3>
+                    <p style={{ fontSize: 12, color: 'var(--dark-500)', margin: 0 }}>Fotos reais capturadas diretamente de catálogos online</p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  className="btn btn-outline"
-                  disabled={isClearingCatalog}
-                  onClick={() => setShowClearCatalogModal(false)}
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowImageSearchModal(false)}
                 >
-                  Cancelar
+                  <X size={18} />
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  disabled={isClearingCatalog}
-                  style={{ background: 'var(--red)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  onClick={async () => {
-                    setIsClearingCatalog(true)
-                    try {
-                      await clearAllProducts()
-                      setShowClearCatalogModal(false)
-                    } finally {
-                      setIsClearingCatalog(false)
-                    }
+              </div>
+
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--dark-200)', background: 'var(--dark-50)' }}>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleExecuteImageSearch(imageSearchQuery)
                   }}
+                  style={{ display: 'flex', gap: 8 }}
                 >
-                  <Trash2 size={16} /> {isClearingCatalog ? 'Apagando...' : 'Sim, Zerar Tudo'}
-                </button>
+                  <input
+                    type="text"
+                    className="input-field"
+                    style={{ flex: 1, height: 38 }}
+                    placeholder="Ex: Impressora Termica Elgin L42 Pro..."
+                    value={imageSearchQuery}
+                    onChange={e => setImageSearchQuery(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ height: 38, padding: '0 18px', fontSize: 13, gap: 6, display: 'inline-flex', alignItems: 'center' }}
+                    disabled={isSearchingImages}
+                  >
+                    {isSearchingImages ? <Loader2 size={16} className="spin" /> : <Search size={16} />}
+                    Buscar
+                  </button>
+                </form>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                {isSearchingImages ? (
+                  <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--dark-500)' }}>
+                    <Loader2 size={36} className="spin" style={{ margin: '0 auto 14px', color: 'var(--lime-dark)' }} />
+                    <p style={{ fontWeight: 600, fontSize: 14, margin: '0 0 4px' }}>Buscando fotos em alta resolução...</p>
+                    <small style={{ color: 'var(--dark-400)' }}>Pesquisando em catálogos e sites de e-commerce</small>
+                  </div>
+                ) : imageSearchResults.length > 0 ? (
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--dark-600)', marginBottom: 12, fontWeight: 500 }}>
+                      Clique em <strong>✓ Foto Principal</strong> para definir como imagem principal do produto:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
+                      {imageSearchResults.map((imgUrl, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            border: '1.5px solid var(--dark-200)',
+                            borderRadius: 10,
+                            overflow: 'hidden',
+                            background: '#fff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                          }}
+                        >
+                          <div style={{ height: 140, padding: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', position: 'relative' }}>
+                            <img
+                              src={imgUrl}
+                              alt={`Opção ${i + 1}`}
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                              onError={(e) => {
+                                e.target.style.opacity = '0.3'
+                              }}
+                            />
+                          </div>
+                          <div style={{ padding: 10, borderTop: '1px solid var(--dark-200)', display: 'flex', flexDirection: 'column', gap: 6, background: '#fff' }}>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              style={{ width: '100%', height: 32, fontSize: 12 }}
+                              onClick={() => handleApplyFoundImage(imgUrl, true)}
+                            >
+                              ✓ Foto Principal
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              style={{ width: '100%', height: 28, fontSize: 11 }}
+                              onClick={() => handleApplyFoundImage(imgUrl, false)}
+                            >
+                              + Adicionar à Galeria
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--dark-400)' }}>
+                    <ImageIcon size={44} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>Nenhuma foto carregada ainda</p>
+                    <small>Digite o nome do produto ou modelo acima e clique em <strong>Buscar</strong> para localizar fotos reais na web.</small>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* =========================================================
-            MODAL DE VINCULAÇÃO DE CÓDIGO DE RASTREIO DOS CORREIOS
-           ========================================================= */}
+
         {orderToEditTracking && (
-          <div className="overlay" style={{ zIndex: 750 }}>
+          <div className="overlay" style={{ zIndex: 1200 }}>
             <div className="modal" style={{ maxWidth: 440, padding: 'var(--space-6)' }}>
               <div style={{
                 width: 48,
@@ -3897,23 +4304,171 @@ export default function AdminDashboard() {
           .adm-form-grid {
             display: grid;
             grid-template-columns: repeat(12, 1fr);
-            gap: 12px;
+            gap: 10px 12px;
           }
           .adm-col-12 { grid-column: span 12; }
           .adm-col-8 { grid-column: span 8; }
+          .adm-col-7 { grid-column: span 7; }
           .adm-col-6 { grid-column: span 6; }
+          .adm-col-5 { grid-column: span 5; }
           .adm-col-4 { grid-column: span 4; }
           .adm-col-3 { grid-column: span 3; }
           .adm-col-2 { grid-column: span 2; }
           .adm-col-1 { grid-column: span 1; }
-          @media (max-width: 768px) {
-            .adm-col-4, .adm-col-3, .adm-col-2, .adm-col-1 { grid-column: span 6; }
+          @media (max-width: 960px) {
+            .adm-col-3 { grid-column: span 6; }
+            .adm-col-2 { grid-column: span 6; }
+            .adm-col-5 { grid-column: span 12; }
+            .adm-col-7 { grid-column: span 12; }
           }
-          @media (max-width: 540px) {
-            .adm-col-6, .adm-col-4, .adm-col-3, .adm-col-2, .adm-col-1 { grid-column: span 12; }
+          @media (max-width: 768px) {
+            .adm-col-12, .adm-col-8, .adm-col-7, .adm-col-6, .adm-col-5, .adm-col-4, .adm-col-3, .adm-col-2, .adm-col-1 { grid-column: span 12; }
+          }
+          .adm-field {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+          }
+          .adm-field label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--dark-600);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            line-height: 1.2;
+          }
+          .adm-field .input-field {
+            padding: 8px 12px;
+            font-size: var(--text-sm);
+            height: 38px;
+          }
+          .adm-field textarea.input-field {
+            height: auto;
+          }
+          .adm-checkbox-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 38px;
+            margin-top: 18px;
+            padding: 0 14px;
+            background: var(--white);
+            border: 1px dashed var(--dark-300);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            user-select: none;
+            transition: all var(--transition-fast);
+          }
+          .adm-checkbox-card:hover {
+            border-color: var(--primary);
+            background: var(--primary-50, rgba(14, 165, 233, 0.04));
+          }
+          .adm-checkbox-card input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary);
+            cursor: pointer;
+            margin: 0;
+          }
+          .adm-checkbox-card span {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--dark-700);
+          }
+          .adm-profit-badge {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            height: 38px;
+            padding: 0 14px;
+            background: var(--lime-glow);
+            border: 1px solid rgba(132, 204, 22, 0.35);
+            border-radius: var(--radius-md);
+          }
+          .adm-profit-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+          }
+          .adm-profit-label {
+            color: var(--dark-600);
+            font-weight: 500;
+          }
+          .adm-profit-val {
+            font-weight: 700;
+            font-family: var(--font-display);
+            font-size: 13px;
+          }
+          .adm-seo-toggles-grid {
+            grid-column: span 12;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 6px;
+          }
+          @media (max-width: 900px) {
+            .adm-seo-toggles-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+          .adm-toggle-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            background: var(--white);
+            border: 1.5px solid var(--dark-200);
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            user-select: none;
+            transition: all var(--transition-fast);
+          }
+          .adm-toggle-card:hover {
+            border-color: var(--dark-300);
+            background: var(--dark-50);
+          }
+          .adm-toggle-card input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin: 0;
+          }
+          .adm-toggle-card.active-amber {
+            border-color: rgba(245, 158, 11, 0.5);
+            background: rgba(245, 158, 11, 0.06);
+          }
+          .adm-toggle-card.active-red {
+            border-color: rgba(239, 68, 68, 0.5);
+            background: rgba(239, 68, 68, 0.06);
+          }
+          .adm-toggle-card.active-green {
+            border-color: rgba(34, 197, 94, 0.5);
+            background: rgba(34, 197, 94, 0.06);
+          }
+          .adm-toggle-card-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+          }
+          .adm-toggle-card-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--dark-800);
+          }
+          .adm-toggle-card-desc {
+            font-size: 11px;
+            color: var(--dark-500);
+            margin: 0;
+            line-height: 1.2;
           }
           .adm-editor-section {
-            padding: var(--space-5); background: var(--dark-50);
+            padding: 16px 20px; background: var(--dark-50);
             border-radius: var(--radius-xl); border: 1px solid var(--dark-200);
             display: flex; flex-direction: column; gap: var(--space-3);
           }
@@ -3940,19 +4495,116 @@ export default function AdminDashboard() {
 
           /* Edit Modal */
           .adm-edit-modal {
-            max-height: 90vh; display: flex; flex-direction: column;
+            position: relative;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden !important;
+            border-radius: var(--radius-2xl);
+            background: var(--white);
           }
           .adm-edit-modal-header {
-            display: flex; justify-content: space-between; align-items: flex-start;
-            padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--dark-100);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: var(--space-5) var(--space-6);
+            border-bottom: 1px solid var(--dark-100);
+            gap: var(--space-4);
+            flex-shrink: 0;
+            background: var(--white);
+            z-index: 10;
           }
           .adm-edit-modal-header h2 { font-size: var(--text-lg); }
+          .adm-edit-close-btn {
+            position: static;
+            width: 38px;
+            height: 38px;
+            border-radius: var(--radius-full);
+            background: var(--dark-100);
+            border: 1px solid var(--dark-200);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--dark-600);
+            transition: all var(--transition-fast);
+            flex-shrink: 0;
+          }
+          .adm-edit-close-btn:hover {
+            background: var(--dark-200);
+            color: var(--dark-950);
+            transform: scale(1.06);
+          }
+          .adm-edit-modal-form {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+          }
           .adm-edit-modal-body {
-            padding: var(--space-6); overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-5);
+            padding: var(--space-6);
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-5);
+            scroll-behavior: smooth;
           }
           .adm-edit-modal-footer {
-            display: flex; justify-content: flex-end; gap: var(--space-3);
-            padding-top: var(--space-4); border-top: 1px solid var(--dark-100);
+            flex-shrink: 0;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--dark-200);
+            background: var(--white);
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.05);
+            z-index: 20;
+          }
+          .adm-edit-modal-footer .btn {
+            height: 38px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all var(--transition-fast);
+          }
+          .adm-edit-modal-footer .btn-save {
+            padding: 0 20px;
+            background: linear-gradient(135deg, var(--lime), var(--lime-dark));
+            color: var(--dark-950);
+            border: none;
+            box-shadow: 0 2px 8px rgba(132, 204, 22, 0.25);
+          }
+          .adm-edit-modal-footer .btn-save:hover {
+            box-shadow: 0 4px 14px rgba(132, 204, 22, 0.35);
+            transform: translateY(-1px);
+          }
+          .adm-edit-modal-footer .btn-cancel {
+            border: 1px solid var(--dark-300);
+            color: var(--dark-700);
+            background: var(--white);
+          }
+          .adm-edit-modal-footer .btn-cancel:hover {
+            background: var(--dark-50);
+            border-color: var(--dark-400);
+            color: var(--dark-900);
+          }
+          .adm-edit-modal-footer .btn-delete {
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            background: rgba(239, 68, 68, 0.04);
+            margin-right: auto;
+          }
+          .adm-edit-modal-footer .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--red);
           }
 
           /* Security Tab */

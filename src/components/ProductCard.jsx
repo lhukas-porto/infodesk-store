@@ -34,6 +34,7 @@ const ProductCard = React.memo(function ProductCard({ product }) {
           className={`product-card-img ${imgLoaded ? 'loaded' : ''}`}
           onLoad={() => setImgLoaded(true)}
           loading="lazy"
+          referrerPolicy="no-referrer"
         />
 
         {/* Badges de Alta Conversão */}

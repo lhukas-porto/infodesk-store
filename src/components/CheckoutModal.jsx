@@ -251,7 +251,7 @@ export default function CheckoutModal() {
 
   const fretePrice = selectedFrete?.preco || 0
   const total = cartTotal + fretePrice
-  const pixDiscount = total * 0.03
+  const pixDiscount = cartTotal * 0.03
   const pixTotal = total - pixDiscount
 
   const handleFinalize = async () => {
@@ -289,8 +289,8 @@ export default function CheckoutModal() {
 
     const validatedFrete = validation.realShippingPrice !== undefined ? validation.realShippingPrice : fretePrice
     const calculatedTotal = cartTotal + validatedFrete
-    const appliedPixDiscount = paymentMethod === 'pix' ? (calculatedTotal * 0.03) : 0
-    const finalTotal = paymentMethod === 'pix' ? (calculatedTotal - appliedPixDiscount) : calculatedTotal
+    const appliedPixDiscount = paymentMethod === 'pix' ? (cartTotal * 0.03) : 0
+    const finalTotal = calculatedTotal - appliedPixDiscount
 
     const pedido = {
       items: cart,

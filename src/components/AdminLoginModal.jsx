@@ -60,7 +60,7 @@ export default function AdminLoginModal() {
 
   if (!showAdminLogin) return null
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e?.preventDefault()
     if (lockoutTimer > 0) return
 
@@ -77,9 +77,8 @@ export default function AdminLoginModal() {
     setIsLoading(true)
     setError('')
 
-    // Micro-delay for security feeling and UI smoothness
-    setTimeout(() => {
-      const result = loginAdmin(email, password, rememberMe)
+    try {
+      const result = await loginAdmin(email, password, rememberMe)
       setIsLoading(false)
 
       if (!result.success) {
@@ -98,7 +97,10 @@ export default function AdminLoginModal() {
         setError('')
         setFailedAttempts(0)
       }
-    }, 400)
+    } catch (err) {
+      setIsLoading(false)
+      setError('Erro ao processar autenticação de administrador.')
+    }
   }
 
   const handleFillDemo = () => {

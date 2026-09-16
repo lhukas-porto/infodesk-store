@@ -128,7 +128,7 @@ export default function ProductModal() {
           {/* Image Gallery */}
           <div className="pm-gallery">
             <div className="pm-main-img">
-              <img src={product.images[currentImg]} alt={product.name} />
+              <img src={product.images[currentImg]} alt={product.name} referrerPolicy="no-referrer" />
               {product.images.length > 1 && (
                 <>
                   <button className="pm-nav pm-nav-prev" onClick={prevImg}><ChevronLeft size={20} /></button>
@@ -144,7 +144,7 @@ export default function ProductModal() {
                   className={`pm-thumb ${i === currentImg ? 'active' : ''}`}
                   onClick={() => setCurrentImg(i)}
                 >
-                  <img src={img} alt={`${product.name} ${i + 1}`} />
+                  <img src={img} alt={`${product.name} ${i + 1}`} referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>
@@ -152,7 +152,11 @@ export default function ProductModal() {
 
           {/* Details */}
           <div className="pm-details">
-            <span className="product-card-brand">{product.brand}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '4px' }}>
+              <span className="product-card-brand">{product.brand}</span>
+              {product.model && <span className="badge badge-light" style={{ fontSize: '11px', padding: '1px 6px' }}>Mod: {product.model}</span>}
+              {(product.partNumber || product.mpn) && <span className="badge" style={{ fontSize: '11px', padding: '1px 6px', background: '#e0e7ff', color: '#3730a3' }}>P/N: {product.partNumber || product.mpn}</span>}
+            </div>
             <h2 className="pm-title">{product.name}</h2>
 
             <div className="product-card-rating" style={{ marginBottom: 'var(--space-2)' }}>
@@ -304,9 +308,51 @@ export default function ProductModal() {
             <button className="btn btn-ghost pm-specs-toggle" onClick={() => setShowSpecs(!showSpecs)}>
               {showSpecs ? 'Ocultar' : 'Ver'} Ficha Técnica
             </button>
-            {showSpecs && product.specs && (
+            {showSpecs && (
               <div className="pm-specs">
-                {product.specs.map((spec, i) => (
+                {product.brand && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Marca</span>
+                    <span className="pm-spec-value">{product.brand}</span>
+                  </div>
+                )}
+                {product.model && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Modelo</span>
+                    <span className="pm-spec-value">{product.model}</span>
+                  </div>
+                )}
+                {(product.partNumber || product.mpn) && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Part Number (P/N)</span>
+                    <span className="pm-spec-value">{product.partNumber || product.mpn}</span>
+                  </div>
+                )}
+                {product.ean && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Código de Barras (EAN)</span>
+                    <span className="pm-spec-value">{product.ean}</span>
+                  </div>
+                )}
+                {product.ncm && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Classificação Fiscal (NCM)</span>
+                    <span className="pm-spec-value">{product.ncm}</span>
+                  </div>
+                )}
+                {product.weight && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Peso Estimado</span>
+                    <span className="pm-spec-value">{product.weight}</span>
+                  </div>
+                )}
+                {product.dimensions && (
+                  <div className="pm-spec-row">
+                    <span className="pm-spec-label">Dimensões</span>
+                    <span className="pm-spec-value">{product.dimensions}</span>
+                  </div>
+                )}
+                {product.specs && product.specs.map((spec, i) => (
                   <div key={i} className="pm-spec-row">
                     <span className="pm-spec-label">{spec.label}</span>
                     <span className="pm-spec-value">{spec.value}</span>

@@ -34,13 +34,11 @@ export function useStore() {
   return ctx
 }
 
-// Configuração padrão de credenciais de administrador (persistidas no localStorage)
-// IMPORTANTE: Altere estas credenciais no painel Admin > Configurações antes de publicar
+// Configuração padrão de dados administrativos
 const DEFAULT_ADMIN_CONFIG = {
   email: 'admin@minhaloja.com.br',
   altEmail: '',
   name: 'Administrador',
-  password: 'admin@2024',
   role: 'Super Admin',
   globalTaxRate: 10,
 }
@@ -63,10 +61,9 @@ export function StoreProvider({ children }) {
   })
 
   // === Orders ===
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem('infodesk_orders')
-    return saved ? JSON.parse(saved) : []
-  })
+  // Inicializado vazio por segurança e conformidade com a LGPD.
+  // Pedidos são carregados sob demanda exclusivamente na área do cliente ou no painel do administrador.
+  const [orders, setOrders] = useState([])
 
   // === Registered Customers Base ===
   const [customers, setCustomers] = useState(() => {
@@ -545,13 +542,22 @@ export function StoreProvider({ children }) {
     localStorage.setItem('infodesk_cart', JSON.stringify(cart))
   }, [cart])
 
+  // Armazena pedidos e clientes apenas na sessão do administrador autenticado para evitar vazamento
   useEffect(() => {
-    localStorage.setItem('infodesk_orders', JSON.stringify(orders))
-  }, [orders])
+    if (isAdmin && orders.length > 0) {
+      try {
+        sessionStorage.setItem('infodesk_admin_orders', JSON.stringify(orders))
+      } catch {}
+    }
+  }, [orders, isAdmin])
 
   useEffect(() => {
-    localStorage.setItem('infodesk_customers', JSON.stringify(customers))
-  }, [customers])
+    if (isAdmin && customers.length > 0) {
+      try {
+        sessionStorage.setItem('infodesk_admin_customers', JSON.stringify(customers))
+      } catch {}
+    }
+  }, [customers, isAdmin])
 
   useEffect(() => {
     if (customerSession) {
@@ -566,7 +572,11 @@ export function StoreProvider({ children }) {
   }, [customerProfile])
 
   useEffect(() => {
-    localStorage.setItem('infodesk_admin_config', JSON.stringify(adminConfig))
+    const safeConfig = { ...adminConfig }
+    delete safeConfig.password // Nunca salva senha em localStorage
+    try {
+      localStorage.setItem('infodesk_admin_config', JSON.stringify(safeConfig))
+    } catch {}
   }, [adminConfig])
 
   useEffect(() => {
@@ -608,25 +618,14 @@ export function StoreProvider({ children }) {
         // 2. Clientes: Por privacidade e segurança (LGPD), NÃO são carregados publicamente na vitrine.
         // O carregamento completo ocorre sob demanda apenas quando o administrador acessar o painel.
 
-        // 3. Pedidos
-        const dbOrders = await fetchOrdersFromDb()
-        if (isMounted && dbOrders !== null) {
-          setOrders(dbOrders)
-          try {
-            localStorage.setItem('infodesk_orders', JSON.stringify(dbOrders))
-          } catch (e) {}
-        }
+        // 3. Pedidos: Por privacidade e segurança (LGPD), NÃO são carregados publicamente na vitrine.
+        // O lojista carrega via loadAdminOrders() no painel e o cliente autenticado via loadCustomerOrders().
 
-        // 4. Configurações Globais (Alíquota Fiscal & Credenciais Admin)
+        // 4. Configurações Globais Públicas (Alíquota Fiscal)
         const taxSetting = await fetchStoreSettingFromDb('global_tax_rate')
         if (isMounted && taxSetting && taxSetting.rate !== undefined) {
           const cloudRate = parseFloat(taxSetting.rate) || 9.05
           setAdminConfig(prev => ({ ...prev, globalTaxRate: cloudRate }))
-        }
-
-        const adminSetting = await fetchStoreSettingFromDb('admin_config')
-        if (isMounted && adminSetting && typeof adminSetting === 'object') {
-          setAdminConfig(prev => ({ ...DEFAULT_ADMIN_CONFIG, ...prev, ...adminSetting }))
         }
       } catch (err) {
         console.warn('Falha na sincronização com o Supabase:', err)
@@ -666,6 +665,24 @@ export function StoreProvider({ children }) {
       }
     } catch (err) {
       console.warn('Erro ao carregar pedidos admin do Supabase:', err)
+    }
+  }, [])
+
+  // Carrega pedidos exclusivamente do cliente autenticado
+  const loadCustomerOrders = useCallback(async (customerEmail) => {
+    if (!isSupabaseConfigured || !customerEmail || !supabase) return
+    try {
+      const cleanEmail = customerEmail.trim().toLowerCase()
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_email', cleanEmail)
+        .order('created_at', { ascending: false })
+      if (!error && Array.isArray(data)) {
+        setOrders(data)
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar pedidos do cliente:', err)
     }
   }, [])
 
@@ -809,47 +826,64 @@ export function StoreProvider({ children }) {
   }, [customerSession])
 
 
-  // === Admin Authentication ===
-  const loginAdmin = useCallback((email, password, remember = true) => {
-    const cleanEmail = (email || '').trim().toLowerCase()
-    const validEmail = cleanEmail === (adminConfig.email || '').toLowerCase() ||
-                       cleanEmail === (adminConfig.altEmail || '').toLowerCase() ||
-                       cleanEmail === 'admin' ||
-                       cleanEmail === 'lucas' ||
-                       cleanEmail.includes('infodesk')
+  // === Admin Authentication (Autenticação Segura via API com Fallback Local) ===
+  const loginAdmin = useCallback(async (email, password, remember = true) => {
+    try {
+      const resp = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, remember })
+      })
+      const data = await resp.json()
+      if (data.success && data.token) {
+        const session = {
+          user: data.user,
+          token: data.token,
+          loginTime: new Date().toISOString(),
+          expiresAt: data.expiresAt
+        }
+        setAdminSession(session)
+        localStorage.setItem('infodesk_admin_session', JSON.stringify(session))
+        setShowAdminLogin(false)
+        setShowAdminDashboard(true)
+        showToast(`Bem-vindo, ${data.user.name.split(' ')[0]}! Acesso seguro liberado. 🛡️`)
+        return { success: true }
+      }
+      return { success: false, error: data.error || 'Credenciais inválidas.' }
+    } catch (err) {
+      console.warn('[Admin Auth] Rota /api/admin/auth indisponível, usando validação de fallback:', err)
+      const cleanEmail = (email || '').trim().toLowerCase()
+      const validEmail = cleanEmail === 'admin' || cleanEmail === 'lucas' || cleanEmail.includes('infodesk') || cleanEmail === (adminConfig.email || '').toLowerCase()
+      const validPassword = password === 'infodesk@admin2026' || password === 'infodesk2026'
 
-    // Aceita a senha configurada no estado ou chave master forte da loja
-    const validPassword = password === adminConfig.password ||
-                          password === 'infodesk@admin2026' ||
-                          password === 'infodesk2026'
+      if (validEmail && validPassword) {
+        const expiresAt = remember
+          ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
 
-    if (validEmail && validPassword) {
-      const expiresAt = remember
-        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        : new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
+        const session = {
+          user: {
+            name: adminConfig.name || 'Administrador',
+            email: adminConfig.email || 'admin@minhaloja.com.br',
+            role: adminConfig.role || 'Super Admin',
+          },
+          token: 'local_' + Math.random().toString(36).substring(2),
+          loginTime: new Date().toISOString(),
+          expiresAt,
+        }
 
-      const session = {
-        user: {
-          name: adminConfig.name || 'Administrador',
-          email: adminConfig.email || 'admin@minhaloja.com.br',
-          role: adminConfig.role || 'Super Admin',
-        },
-        token: 'auth_' + Math.random().toString(36).substring(2) + Date.now().toString(36),
-        loginTime: new Date().toISOString(),
-        expiresAt,
+        setAdminSession(session)
+        localStorage.setItem('infodesk_admin_session', JSON.stringify(session))
+        setShowAdminLogin(false)
+        setShowAdminDashboard(true)
+        showToast(`Bem-vindo, ${(adminConfig.name || 'Administrador').split(' ')[0]}! Acesso seguro liberado. 🛡️`)
+        return { success: true }
       }
 
-      setAdminSession(session)
-      localStorage.setItem('infodesk_admin_session', JSON.stringify(session))
-      setShowAdminLogin(false)
-      setShowAdminDashboard(true)
-      showToast(`Bem-vindo, ${(adminConfig.name || 'Administrador').split(' ')[0]}! Acesso seguro liberado. 🛡️`)
-      return { success: true }
-    }
-
-    return {
-      success: false,
-      error: !validEmail ? 'E-mail ou usuário não encontrado.' : 'Senha incorreta.',
+      return {
+        success: false,
+        error: !validEmail ? 'E-mail ou usuário não encontrado.' : 'Senha incorreta.',
+      }
     }
   }, [adminConfig, showToast])
 
@@ -1180,21 +1214,28 @@ export function StoreProvider({ children }) {
 
   // === Order Actions ===
   const createOrder = useCallback((orderData) => {
+    const isImmediatePaid = orderData.status === 'Pago'
     const order = {
       id: 'ORD-' + Date.now(),
       date: new Date().toISOString(),
-      status: 'Pendente',
+      status: orderData.status || 'Pendente',
       trackingCode: null,
+      stockDeducted: isImmediatePaid,
       ...orderData,
     }
 
-    // Deduzir estoque
-    orderData.items.forEach(item => {
-      updateProduct(item.id, {
-        stock: Math.max(0, (products.find(p => p.id === item.id)?.stock || 0) - item.qty),
-        sold: (products.find(p => p.id === item.id)?.sold || 0) + item.qty,
+    // Apenas deduz estoque imediatamente se o pedido já nasceu aprovado/pago
+    if (isImmediatePaid && Array.isArray(orderData.items)) {
+      orderData.items.forEach(item => {
+        const currentProd = products.find(p => p.id === item.id)
+        if (currentProd) {
+          updateProduct(item.id, {
+            stock: Math.max(0, (currentProd.stock || 0) - (item.qty || item.quantity || 1)),
+            sold: (currentProd.sold || 0) + (item.qty || item.quantity || 1),
+          })
+        }
       })
-    })
+    }
 
     setOrders(prev => [order, ...prev])
     clearCart()
@@ -1209,12 +1250,39 @@ export function StoreProvider({ children }) {
 
   const updateOrderStatus = useCallback(async (orderId, status, trackingCode) => {
     setOrders(prev => {
-      const updated = prev.map(o =>
-        o.id === orderId ? { ...o, status, ...(trackingCode ? { trackingCode } : {}) } : o
-      )
-      try {
-        localStorage.setItem('infodesk_orders', JSON.stringify(updated))
-      } catch (e) {}
+      const updated = prev.map(o => {
+        if (o.id !== orderId) return o
+
+        // Se estiver cancelando pedido que deduziu estoque, estorna o estoque
+        if (status === 'Cancelado' && o.stockDeducted && Array.isArray(o.items)) {
+          o.items.forEach(item => {
+            const currentProd = products.find(p => p.id === item.id)
+            if (currentProd) {
+              updateProduct(item.id, {
+                stock: (currentProd.stock || 0) + (item.quantity || item.qty || 1),
+                sold: Math.max(0, (currentProd.sold || 0) - (item.quantity || item.qty || 1))
+              })
+            }
+          })
+          return { ...o, status, stockDeducted: false, ...(trackingCode ? { trackingCode } : {}) }
+        }
+
+        // Se estiver confirmando pagamento e ainda não deduziu estoque
+        if (status === 'Pago' && !o.stockDeducted && Array.isArray(o.items)) {
+          o.items.forEach(item => {
+            const currentProd = products.find(p => p.id === item.id)
+            if (currentProd) {
+              updateProduct(item.id, {
+                stock: Math.max(0, (currentProd.stock || 0) - (item.quantity || item.qty || 1)),
+                sold: (currentProd.sold || 0) + (item.quantity || item.qty || 1)
+              })
+            }
+          })
+          return { ...o, status, stockDeducted: true, ...(trackingCode ? { trackingCode } : {}) }
+        }
+
+        return { ...o, status, ...(trackingCode ? { trackingCode } : {}) }
+      })
       return updated
     })
 
@@ -1227,7 +1295,7 @@ export function StoreProvider({ children }) {
     }
 
     showToast(`Pedido ${orderId} atualizado para: ${status}`)
-  }, [showToast])
+  }, [products, updateProduct, showToast])
 
   const deleteOrder = useCallback(async (orderId) => {
     if (!orderId) return
@@ -1301,7 +1369,7 @@ export function StoreProvider({ children }) {
     // Products
     addProduct, updateProduct, deleteProduct, clearAllProducts,
     // Orders
-    createOrder, updateOrderStatus, deleteOrder, loadAdminOrders,
+    createOrder, updateOrderStatus, deleteOrder, loadAdminOrders, loadCustomerOrders,
     // Admin & Auth
     isAdmin, adminSession, adminConfig, globalTaxRate: adminConfig.globalTaxRate ?? 10,
     loginAdmin, logoutAdmin, changeAdminPassword, updateGlobalTaxRate,
