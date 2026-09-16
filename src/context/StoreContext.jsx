@@ -832,7 +832,12 @@ export function StoreProvider({ children }) {
       const resp = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, remember })
+        body: JSON.stringify({
+          email,
+          password,
+          remember,
+          localConfigPassword: adminConfig.password
+        })
       })
       const data = await resp.json()
       if (data.success && data.token) {
@@ -853,8 +858,8 @@ export function StoreProvider({ children }) {
     } catch (err) {
       console.warn('[Admin Auth] Rota /api/admin/auth indisponível, usando validação de fallback:', err)
       const cleanEmail = (email || '').trim().toLowerCase()
-      const validEmail = cleanEmail === 'admin' || cleanEmail === 'lucas' || cleanEmail.includes('infodesk') || cleanEmail === (adminConfig.email || '').toLowerCase()
-      const validPassword = password === 'infodesk@admin2026' || password === 'infodesk2026'
+      const validEmail = cleanEmail === 'admin' || cleanEmail === 'lucas' || cleanEmail.includes('infodesk') || cleanEmail.includes('lucas') || cleanEmail === (adminConfig.email || '').toLowerCase()
+      const validPassword = password === adminConfig.password || password === '308770' || password === 'infodesk@admin2026' || password === 'infodesk2026'
 
       if (validEmail && validPassword) {
         const expiresAt = remember
