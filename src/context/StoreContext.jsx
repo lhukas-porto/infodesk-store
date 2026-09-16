@@ -480,7 +480,7 @@ export function StoreProvider({ children }) {
     if (companyData.descricaoCurta) {
       const metaDesc = document.querySelector('meta[name="description"]')
       if (metaDesc) {
-        metaDesc.setAttribute('content', `${publicName} — ${companyData.descricaoCurta}`)
+        metaDesc.setAttribute('content', `${nomeFantasia} — ${companyData.descricaoCurta}`)
       }
     }
 
