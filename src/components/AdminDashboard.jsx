@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   X, Package, DollarSign, ShoppingCart, BarChart3, Plus, ArrowLeft,
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
   Shield, KeyRound, User, Users, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
   Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
   MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase, CreditCard,
-  Check, Bell
+  Check, Bell, Download, FileSpreadsheet
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient'
@@ -17,11 +17,19 @@ import {
 } from '../services/pricingService'
 import { formatCep, consultarCep } from '../services/correiosService'
 import ShippingLabelModal from './ShippingLabelModal'
+import BatchShippingLabelModal from './BatchShippingLabelModal'
+import SetupWizardModal from './SetupWizardModal'
 import BarcodeLabel from './BarcodeLabel'
 import AdminCustomersSection from './admin/AdminCustomersSection'
 import AdminPaymentsSection from './admin/AdminPaymentsSection'
 import AdminMarketingSection from './admin/AdminMarketingSection'
 import { slugify } from '../services/seoManager'
+import {
+  exportProductsToCsv,
+  downloadCsvTemplate,
+  parseProductsCsv
+} from '../services/csvProductService'
+import { compressImageToWebP } from '../services/imageOptimizer'
 import {
   createWhatsAppLink,
   buildPaymentReminderMessage,
@@ -141,6 +149,95 @@ export default function AdminDashboard() {
   // Filtros avançados na gestão de pedidos
   const [orderStatusFilter, setOrderStatusFilter] = useState('all')
   const [orderSearch, setOrderSearch] = useState('')
+
+  // Impressão de Etiquetas dos Correios em Lote
+  const [selectedOrderIds, setSelectedOrderIds] = useState([])
+  const [batchOrdersToPrint, setBatchOrdersToPrint] = useState([])
+
+  // Assistente de Configuração Rápida (Setup Wizard)
+  const [showSetupWizard, setShowSetupWizard] = useState(false)
+
+  // Importação e Exportação de Produtos via Planilha CSV / Excel
+  const [isImportingCsv, setIsImportingCsv] = useState(false)
+  const csvFileInputRef = useRef(null)
+
+  const handleExportCsv = () => {
+    try {
+      exportProductsToCsv(products)
+      showToast(`Catálogo com ${products.length} produtos exportado para CSV com sucesso! 📤`)
+    } catch (err) {
+      showToast(err.message || 'Erro ao exportar CSV.', 'error')
+    }
+  }
+
+  const handleDownloadCsvTemplate = () => {
+    try {
+      downloadCsvTemplate()
+      showToast('Planilha modelo baixada! Preencha e importe no botão Importar CSV. 📄')
+    } catch (err) {
+      showToast('Erro ao baixar modelo.', 'error')
+    }
+  }
+
+  const handleImportCsv = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsImportingCsv(true)
+    try {
+      const text = await file.text()
+      const { products: parsedItems, total } = parseProductsCsv(text)
+      if (total === 0) {
+        showToast('Nenhum produto válido encontrado no arquivo.', 'error')
+        return
+      }
+
+      let countNew = 0
+      let countUpdated = 0
+
+      for (const item of parsedItems) {
+        const existing = (item.id && products.find(p => String(p.id) === String(item.id))) ||
+                         (item.ean && products.find(p => p.ean && p.ean === item.ean))
+
+        if (existing) {
+          await updateProduct(existing.id, item)
+          countUpdated++
+        } else {
+          await addProduct(item)
+          countNew++
+        }
+      }
+
+      showToast(`Importação concluída com sucesso! ${countNew} novos cadastrados, ${countUpdated} atualizados. 📦🎉`)
+    } catch (err) {
+      showToast(err.message || 'Falha ao processar arquivo CSV.', 'error')
+    } finally {
+      setIsImportingCsv(false)
+      if (e.target) e.target.value = ''
+    }
+  }
+
+  const toggleSelectAllOrders = (visibleOrders) => {
+    if (selectedOrderIds.length === visibleOrders.length && visibleOrders.length > 0) {
+      setSelectedOrderIds([])
+    } else {
+      setSelectedOrderIds(visibleOrders.map(o => o.id))
+    }
+  }
+
+  const toggleOrderSelection = (orderId) => {
+    setSelectedOrderIds(prev =>
+      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
+    )
+  }
+
+  const handlePrintBatchLabels = () => {
+    const selected = orders.filter(o => selectedOrderIds.includes(o.id))
+    if (selected.length === 0) {
+      showToast('Selecione pelo menos um pedido para imprimir.', 'error')
+      return
+    }
+    setBatchOrdersToPrint(selected)
+  }
 
   // Edição rápida de preço e estoque na tabela de produtos
   const [quickEdits, setQuickEdits] = useState({}) // { [id]: { price, stock, saved: boolean } }
@@ -1317,6 +1414,23 @@ export default function AdminDashboard() {
             <button
               type="button"
               className="btn btn-outline btn-sm"
+              onClick={() => setShowSetupWizard(true)}
+              style={{
+                borderColor: 'var(--lime)',
+                color: 'var(--lime-dark)',
+                background: 'var(--lime-glow)',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              title="Abrir Assistente de Configuração Rápida em 3 Passos (White-Label)"
+            >
+              <Sparkles size={15} /> Setup Wizard
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
               onClick={() => { setShowScanner(true); setShowAdminDashboard(false) }}
               title="Abrir scanner de código de barras"
             >
@@ -1520,15 +1634,57 @@ export default function AdminDashboard() {
                     <Plus size={16} /> Cadastrar Produto
                   </button>
                   {products.length > 0 && productViewMode === 'list' && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setShowClearCatalogModal(true)}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: 'var(--red)', color: 'var(--red)' }}
-                      title="Apagar todos os produtos do catálogo e do banco de dados"
-                    >
-                      <Trash2 size={14} /> Zerar Catálogo
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={handleExportCsv}
+                        title="Exportar catálogo completo de produtos para planilha CSV compatível com Excel"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Download size={14} /> Exportar CSV
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => csvFileInputRef.current?.click()}
+                        disabled={isImportingCsv}
+                        title="Importar produtos em lote a partir de uma planilha CSV"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        {isImportingCsv ? <Loader2 size={14} className="spin" /> : <FileSpreadsheet size={14} />}
+                        <span>{isImportingCsv ? 'Importando...' : 'Importar CSV'}</span>
+                      </button>
+
+                      <input
+                        ref={csvFileInputRef}
+                        type="file"
+                        accept=".csv, text/csv"
+                        style={{ display: 'none' }}
+                        onChange={handleImportCsv}
+                      />
+
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={handleDownloadCsvTemplate}
+                        title="Baixar planilha modelo para preenchimento"
+                        style={{ fontSize: '11px', color: 'var(--dark-500)', textDecoration: 'underline' }}
+                      >
+                        Modelo CSV
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setShowClearCatalogModal(true)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: 'var(--red)', color: 'var(--red)' }}
+                        title="Apagar todos os produtos do catálogo e do banco de dados"
+                      >
+                        <Trash2 size={14} /> Zerar Catálogo
+                      </button>
+                    </>
                   )}
                 </div>
 
@@ -1848,11 +2004,86 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 <div className="adm-table-wrap">
+                  {/* Barra Flutuante de Ações em Lote */}
+                  {selectedOrderIds.length > 0 && (
+                    <div style={{
+                      background: '#0f172a',
+                      color: '#ffffff',
+                      borderRadius: '10px',
+                      padding: '10px 18px',
+                      marginBottom: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: '10px',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.2)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          background: 'var(--lime)',
+                          color: '#0f172a',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontWeight: 800,
+                          fontSize: '12px'
+                        }}>
+                          {selectedOrderIds.length}
+                        </span>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                          {selectedOrderIds.length === 1 ? 'pedido selecionado' : 'pedidos selecionados'} para postagem
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handlePrintBatchLabels}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <Printer size={15} /> Imprimir {selectedOrderIds.length} Etiquetas em Lote
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setSelectedOrderIds([])}
+                          style={{ color: '#94a3b8', fontSize: '12px' }}
+                        >
+                          Desmarcar Todos
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <table className="adm-table">
-                    <thead><tr><th>Pedido</th><th>Data</th><th>Cliente</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Ações</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '40px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+                            onChange={() => toggleSelectAllOrders(filteredOrders)}
+                            title="Selecionar todos os pedidos visíveis"
+                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                          />
+                        </th>
+                        <th>Pedido</th><th>Data</th><th>Cliente</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Ações</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {filteredOrders.map(o => (
-                        <tr key={o.id}>
+                        <tr
+                          key={o.id}
+                          style={selectedOrderIds.includes(o.id) ? { background: 'rgba(132, 204, 22, 0.08)' } : {}}
+                        >
+                          <td style={{ textAlign: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedOrderIds.includes(o.id)}
+                              onChange={() => toggleOrderSelection(o.id)}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </td>
                           <td><strong>{o.id}</strong></td>
                           <td>{new Date(o.date).toLocaleDateString('pt-BR')}</td>
                           <td>
@@ -3543,6 +3774,21 @@ export default function AdminDashboard() {
           <ShippingLabelModal
             order={labelOrderToPrint}
             onClose={() => setLabelOrderToPrint(null)}
+          />
+        )}
+
+        {/* Modal de Impressão em Lote de Etiquetas */}
+        {batchOrdersToPrint && batchOrdersToPrint.length > 0 && (
+          <BatchShippingLabelModal
+            orders={batchOrdersToPrint}
+            onClose={() => setBatchOrdersToPrint([])}
+          />
+        )}
+
+        {/* Modal do Assistente de Configuração Rápida (Setup Wizard) */}
+        {showSetupWizard && (
+          <SetupWizardModal
+            onClose={() => setShowSetupWizard(false)}
           />
         )}
 

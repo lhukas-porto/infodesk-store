@@ -5,7 +5,8 @@
 /* --- Font Loading --- */
 @font-face {
   font-family: 'Horatio Bold';
-  src: url('./assets/fonts/HORATIOB.TTF') format('truetype');
+  src: url('./assets/fonts/HORATIOB.woff2') format('woff2'),
+       url('./assets/fonts/HORATIOB.TTF') format('truetype');
   font-weight: bold;
   font-style: normal;
   font-display: swap;
