@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js'
 import { slugify } from './seoManager.js'
+import { hashCustomerPassword } from './customerService.js'
 
 // Conversores snake_case <-> camelCase para Produtos (com suporte a SEO e Multiempresa)
 export function mapDbProductToApp(dbProd) {
@@ -284,15 +285,44 @@ export async function fetchCustomersFromDb(companyId = 'default', role = 'super_
   }
 }
 
+/**
+ * Busca estritamente apenas o cliente tentando logar, sem expor os demais
+ */
+export async function findCustomerByCredentials(loginIdentifier) {
+  if (!isSupabaseConfigured || !supabase || !loginIdentifier) return null
+  const cleanId = (loginIdentifier || '').trim().toLowerCase()
+  const cleanDigits = (loginIdentifier || '').replace(/\D/g, '')
+
+  try {
+    let query = supabase.from('customers').select('*')
+    if (cleanDigits && cleanDigits.length >= 11) {
+      query = query.or(`email.eq.${cleanId},cpf.eq.${cleanDigits}`)
+    } else {
+      query = query.eq('email', cleanId)
+    }
+    const { data, error } = await query.limit(1).maybeSingle()
+    if (error || !data) return null
+    return data
+  } catch (err) {
+    console.warn('Supabase: Erro ao buscar cliente específico para login:', err)
+    return null
+  }
+}
+
 export async function upsertCustomerToDb(customer, companyId = 'default') {
   if (!isSupabaseConfigured || !supabase) return null
   try {
+    let safePassword = customer.password || 'default_hash_guest'
+    if (safePassword && !safePassword.startsWith('sha256_')) {
+      safePassword = await hashCustomerPassword(safePassword)
+    }
+
     const payload = {
       nome: customer.nome,
       email: customer.email?.toLowerCase()?.trim(),
       cpf: customer.cpf,
       telefone: customer.telefone,
-      password: customer.password || 'default_hash_guest',
+      password: safePassword,
       cep: customer.cep,
       endereco: customer.endereco,
       numero: customer.numero,

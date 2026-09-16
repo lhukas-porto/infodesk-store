@@ -56,11 +56,11 @@ export function getStorePrimaryDomain() {
         const parsed = JSON.parse(mkt)
         if (parsed.primary_domain) return normalizeHostname(parsed.primary_domain)
       }
-      // 2. Tenta carregar dos dados da empresa
-      const comp = localStorage.getItem('infodesk_company_data')
+      // 2. Tenta carregar dos dados da empresa (white-label desacoplado)
+      const comp = localStorage.getItem('store_company_data') || localStorage.getItem('infodesk_company_data')
       if (comp) {
         const parsedComp = JSON.parse(comp)
-        if (parsedComp.dominio) return normalizeHostname(parsedComp.dominio)
+        if (parsedComp.dominio || parsedComp.site) return normalizeHostname(parsedComp.dominio || parsedComp.site)
       }
       // 3. Fallback para o próprio hostname acessado
       if (!isDevEnvironment(window.location.hostname)) {

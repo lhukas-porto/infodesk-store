@@ -355,12 +355,21 @@ export default function CheckoutModal() {
       return
     }
 
-    if (paymentMethod === 'boleto') {
+    if (paymentMethod === 'pix') {
+      const orderId = 'ORD-' + Date.now()
+      const pixCode = `00020126580014br.gov.bcb.pix0136infodesk-store-${orderId}52040000530398654${finalTotal.toFixed(2)}5802BR`
+      pedido.id = orderId
+      pedido.status = 'Pendente'
+      pedido.pixCode = pixCode
+      clearCart()
+    } else if (paymentMethod === 'boleto') {
       const boleto = gerarBoleto({ id: 'ORD-' + Date.now(), total: finalTotal, cliente })
       pedido.boleto = boleto
+      clearCart()
     } else if (paymentMethod === 'link') {
       const link = gerarLinkPagamento({ total: finalTotal })
       pedido.linkPagamento = link
+      clearCart()
     }
 
     const order = createOrder(pedido)
@@ -1002,22 +1011,95 @@ export default function CheckoutModal() {
             <div className="ck-form">
               <button className="btn btn-ghost ck-back" onClick={() => setStep(2)}><ArrowLeft size={16} /> Voltar</button>
               <h3>Forma de Pagamento</h3>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--dark-500)', marginBottom: 'var(--space-4)' }}>
+                Selecione como deseja concluir seu pedido com segurança e rapidez:
+              </p>
               
-              <div className="ck-payment-options" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Mercado Pago Checkout Pro (Único Gateway Oficial) */}
+              <div className="ck-payment-options" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Opção 1: Pix Instantâneo Direto com 3% de Desconto */}
                 <div
-                  className="ck-payment-card ck-payment-mp selected"
-                  onClick={() => setPaymentMethod('mercadopago')}
+                  className={`ck-payment-card ${paymentMethod === 'pix' ? 'selected' : ''}`}
+                  onClick={() => setPaymentMethod('pix')}
                   style={{
-                    border: '2px solid #009ee3',
-                    background: 'linear-gradient(180deg, rgba(0, 158, 227, 0.06) 0%, rgba(255, 255, 255, 0.95) 100%)',
+                    border: paymentMethod === 'pix' ? '2px solid #16a34a' : '1px solid var(--dark-200)',
+                    background: paymentMethod === 'pix' ? 'linear-gradient(180deg, rgba(22, 163, 74, 0.08) 0%, rgba(255, 255, 255, 0.95) 100%)' : '#ffffff',
                     position: 'relative',
                     overflow: 'hidden',
-                    padding: '24px 20px',
+                    padding: '20px',
                     borderRadius: '12px',
                     textAlign: 'left',
-                    boxShadow: '0 4px 16px rgba(0, 158, 227, 0.08)',
-                    cursor: 'pointer'
+                    boxShadow: paymentMethod === 'pix' ? '0 4px 16px rgba(22, 163, 74, 0.12)' : 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    background: '#16a34a',
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '4px 12px',
+                    borderBottomLeftRadius: '8px',
+                    letterSpacing: '0.5px'
+                  }}>
+                    ECONOMIZE 3% • LIBERAÇÃO IMEDIATA
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' }}>
+                    <div style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: '10px',
+                      background: '#dcfce7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#16a34a',
+                      flexShrink: 0
+                    }}>
+                      <QrCode size={26} />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: '17px', color: '#0f172a', display: 'block', fontWeight: 800 }}>
+                        PIX Instantâneo (QR Code e Copia e Cola)
+                      </strong>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>
+                        Pague direto pelo seu aplicativo do banco sem redirecionamento
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '10px' }}>
+                    <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>
+                      ⚡ Desconto de 3% aplicado (- R$ {pixDiscount.toFixed(2).replace('.', ',')})
+                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Total no Pix</span>
+                      <strong style={{ fontSize: '20px', color: '#16a34a', fontWeight: 800 }}>
+                        R$ {pixTotal.toFixed(2).replace('.', ',')}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Opção 2: Mercado Pago Checkout Pro */}
+                <div
+                  className={`ck-payment-card ${paymentMethod === 'mercadopago' ? 'selected' : ''}`}
+                  onClick={() => setPaymentMethod('mercadopago')}
+                  style={{
+                    border: paymentMethod === 'mercadopago' ? '2px solid #009ee3' : '1px solid var(--dark-200)',
+                    background: paymentMethod === 'mercadopago' ? 'linear-gradient(180deg, rgba(0, 158, 227, 0.06) 0%, rgba(255, 255, 255, 0.95) 100%)' : '#ffffff',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    padding: '20px',
+                    borderRadius: '12px',
+                    textAlign: 'left',
+                    boxShadow: paymentMethod === 'mercadopago' ? '0 4px 16px rgba(0, 158, 227, 0.08)' : 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   <div style={{
@@ -1035,56 +1117,31 @@ export default function CheckoutModal() {
                     CHECKOUT OFICIAL & SEGURO
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '10px' }}>
                     <div style={{
-                      width: '46px',
-                      height: '46px',
+                      width: '44px',
+                      height: '44px',
                       borderRadius: '10px',
                       background: '#e0f2fe',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#009ee3'
+                      color: '#009ee3',
+                      flexShrink: 0
                     }}>
-                      <ShieldCheck size={28} />
+                      <ShieldCheck size={26} />
                     </div>
                     <div>
-                      <strong style={{ fontSize: '18px', color: '#0f172a', display: 'block', fontWeight: 800 }}>
+                      <strong style={{ fontSize: '17px', color: '#0f172a', display: 'block', fontWeight: 800 }}>
                         Mercado Pago Checkout Pro
                       </strong>
                       <span style={{ fontSize: '13px', color: '#64748b' }}>
-                        Pague com PIX, Cartão até 12x ou Boleto em ambiente seguro
+                        Cartão de Crédito em até 12x, Pix ou Boleto
                       </span>
                     </div>
                   </div>
 
-                  {/* Badges de Formas Suportadas */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                    gap: '10px',
-                    margin: '14px 0',
-                    padding: '12px',
-                    background: '#ffffff',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></span>
-                      <strong>PIX Instantâneo</strong>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0284c7' }}></span>
-                      <strong>Cartão de Crédito</strong> (até 12x)
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#334155' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }}></span>
-                      <strong>Boleto Bancário</strong>
-                    </div>
-                  </div>
-
-                  {/* Preço e Garantia */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '10px' }}>
                     <span style={{ fontSize: '12px', color: '#64748b' }}>
                       🔒 Criptografia ponta a ponta Mercado Pago
                     </span>
@@ -1103,8 +1160,8 @@ export default function CheckoutModal() {
                 onClick={handleFinalize}
                 disabled={!paymentMethod || isValidatingOrder || isCreatingMPOrder}
                 style={{
-                  background: '#009ee3',
-                  borderColor: '#009ee3',
+                  background: paymentMethod === 'pix' ? '#16a34a' : '#009ee3',
+                  borderColor: paymentMethod === 'pix' ? '#16a34a' : '#009ee3',
                   color: '#ffffff',
                   fontSize: '16px',
                   fontWeight: 700,
@@ -1113,8 +1170,8 @@ export default function CheckoutModal() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '10px',
-                  boxShadow: '0 4px 12px rgba(0, 158, 227, 0.25)',
-                  marginTop: '8px'
+                  boxShadow: paymentMethod === 'pix' ? '0 4px 12px rgba(22, 163, 74, 0.25)' : '0 4px 12px rgba(0, 158, 227, 0.25)',
+                  marginTop: '16px'
                 }}
               >
                 {isValidatingOrder ? (
@@ -1126,6 +1183,11 @@ export default function CheckoutModal() {
                   <>
                     <Loader2 className="spinner" size={18} style={{ animation: 'spin 1s linear infinite' }} />
                     Conectando ao Mercado Pago Seguro...
+                  </>
+                ) : paymentMethod === 'pix' ? (
+                  <>
+                    <QrCode size={20} />
+                    Gerar Pix com Desconto — R$ {pixTotal.toFixed(2).replace('.', ',')}
                   </>
                 ) : (
                   <>
@@ -1162,15 +1224,104 @@ export default function CheckoutModal() {
               )}
 
               {orderResult.paymentMethod === 'pix' && (
-                <div className="ck-pix-info">
-                  <h4>Pix Copia e Cola</h4>
-                  <p>Valor com 3% de desconto: <strong style={{ color: '#16a34a' }}>R$ {(orderResult.total || pixTotal).toFixed(2).replace('.', ',')}</strong></p>
-                  <div className="ck-pix-code">
-                    <code>00020126580014br.gov.bcb.pix0136infodesk-store-{orderResult.id}52040000530398654{(orderResult.total || pixTotal).toFixed(2)}5802BR</code>
-                    <button className="btn btn-ghost btn-sm" onClick={() => handleCopy(`00020126580014br.gov.bcb.pix0136infodesk-store-${orderResult.id}52040000530398654${(orderResult.total || pixTotal).toFixed(2)}5802BR`)}>
-                      <Copy size={14} /> Copiar Código
-                    </button>
+                <div className="ck-pix-info" style={{
+                  background: '#f0fdf4',
+                  border: '2px solid #86efac',
+                  borderRadius: '16px',
+                  padding: '24px 20px',
+                  margin: '16px 0',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, marginBottom: '12px' }}>
+                    <QrCode size={14} /> PAGAMENTO PIX INSTANTÂNEO
                   </div>
+
+                  <h3 style={{ margin: '0 0 6px 0', color: '#15803d', fontSize: '20px' }}>
+                    Escaneie o QR Code ou Copie o Código
+                  </h3>
+                  <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#166534' }}>
+                    Valor com 3% de desconto exclusivo: <strong style={{ fontSize: '18px', color: '#15803d' }}>R$ {(orderResult.total || pixTotal).toFixed(2).replace('.', ',')}</strong>
+                  </p>
+
+                  {/* QR Code Renderizado */}
+                  <div style={{
+                    background: '#ffffff',
+                    padding: '12px',
+                    borderRadius: '12px',
+                    display: 'inline-block',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    marginBottom: '16px'
+                  }}>
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(orderResult.pixCode || `00020126580014br.gov.bcb.pix0136infodesk-store-${orderResult.id}52040000530398654${(orderResult.total || pixTotal).toFixed(2)}5802BR`)}`}
+                      alt="QR Code Pix"
+                      style={{ width: '180px', height: '180px', display: 'block' }}
+                    />
+                  </div>
+
+                  {/* Código Pix Copia e Cola */}
+                  <div style={{ maxWidth: '440px', margin: '0 auto 16px auto' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: '#166534', display: 'block', textAlign: 'left', marginBottom: '4px' }}>
+                      PIX COPIA E COLA:
+                    </label>
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      background: '#ffffff',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      alignItems: 'center'
+                    }}>
+                      <input
+                        readOnly
+                        value={orderResult.pixCode || `00020126580014br.gov.bcb.pix0136infodesk-store-${orderResult.id}52040000530398654${(orderResult.total || pixTotal).toFixed(2)}5802BR`}
+                        style={{
+                          flex: 1,
+                          border: 'none',
+                          background: 'transparent',
+                          fontSize: '11px',
+                          fontFamily: 'monospace',
+                          color: '#1e293b',
+                          outline: 'none'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => handleCopy(orderResult.pixCode || `00020126580014br.gov.bcb.pix0136infodesk-store-${orderResult.id}52040000530398654${(orderResult.total || pixTotal).toFixed(2)}5802BR`)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#16a34a', borderColor: '#16a34a', flexShrink: 0 }}
+                      >
+                        <Copy size={13} /> Copiar Código
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Botão de Enviar Comprovante no Zap */}
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => {
+                      const zapNum = (companyData?.whatsapp || companyData?.telefone || '61986420061').replace(/\D/g, '')
+                      const msg = `Olá! Acabei de realizar o pedido *#${orderResult.id}* no valor de *R$ ${(orderResult.total || pixTotal).toFixed(2).replace('.', ',')}* via PIX! Segue o comprovante para liberação rápida:`
+                      window.open(`https://api.whatsapp.com/send?phone=${zapNum.startsWith('55') ? zapNum : '55' + zapNum}&text=${encodeURIComponent(msg)}`, '_blank')
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      color: '#15803d',
+                      borderColor: '#86efac',
+                      background: '#ffffff',
+                      fontWeight: 600,
+                      fontSize: '12px',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <MessageCircle size={15} /> Enviar Comprovante no WhatsApp da Loja
+                  </button>
                 </div>
               )}
 

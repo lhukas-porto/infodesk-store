@@ -24,6 +24,7 @@ export default function AdminCustomersSection() {
   const {
     customers = [],
     orders = [],
+    loadAdminCustomers,
     adminSession,
     adminConfig,
     adminRole,
@@ -37,6 +38,10 @@ export default function AdminCustomersSection() {
     fetchCustomerAuditLogs,
     showToast
   } = useStore()
+
+  useEffect(() => {
+    loadAdminCustomers?.()
+  }, [loadAdminCustomers])
 
   // Papel do administrador atual (RBAC)
   const currentRole = adminSession?.user?.role || adminRole || 'super_admin'

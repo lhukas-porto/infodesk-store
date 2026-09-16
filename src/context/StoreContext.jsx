@@ -14,12 +14,17 @@ import {
   insertOrderToDb,
   updateOrderInDb,
   deleteOrderFromDb,
+  findCustomerByCredentials,
   fetchStoreSettingFromDb,
   saveStoreSettingToDb
 } from '../services/supabaseService'
 import { isSupabaseConfigured } from '../services/supabaseClient'
-import { DEFAULT_COMPANY_DATA, getCompanyPublicName } from '../services/companyService'
-import { createAnonymizedCustomerPayload } from '../services/customerService'
+import { DEFAULT_COMPANY_DATA, getCompanyPublicName, applyBrandThemeColor } from '../services/companyService'
+import {
+  createAnonymizedCustomerPayload,
+  hashCustomerPassword,
+  verifyCustomerPassword
+} from '../services/customerService'
 
 const StoreContext = createContext()
 
@@ -488,6 +493,10 @@ export function StoreProvider({ children }) {
       }
       linkIcon.href = companyData.favicon
     }
+
+    if (companyData.corPrimaria) {
+      applyBrandThemeColor(companyData.corPrimaria)
+    }
   }, [companyData])
 
   // Função para salvar e atualizar os dados da empresa
@@ -596,11 +605,8 @@ export function StoreProvider({ children }) {
           } catch {}
         }
 
-        // 2. Clientes
-        const dbCustomers = await fetchCustomersFromDb()
-        if (isMounted && dbCustomers !== null) {
-          setCustomers(dbCustomers)
-        }
+        // 2. Clientes: Por privacidade e segurança (LGPD), NÃO são carregados publicamente na vitrine.
+        // O carregamento completo ocorre sob demanda apenas quando o administrador acessar o painel.
 
         // 3. Pedidos
         const dbOrders = await fetchOrdersFromDb()
@@ -637,25 +643,64 @@ export function StoreProvider({ children }) {
     setTimeout(() => setToast(null), 3500)
   }, [])
 
-  // === Customer Authentication Methods ===
-  const loginCustomer = useCallback((loginIdentifier, password) => {
+  // Carrega lista de clientes sob demanda apenas para uso administrativo autorizado
+  const loadAdminCustomers = useCallback(async () => {
+    if (!isSupabaseConfigured) return
+    try {
+      const dbCustomers = await fetchCustomersFromDb()
+      if (dbCustomers !== null) {
+        setCustomers(dbCustomers)
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar base de clientes admin:', err)
+    }
+  }, [])
+
+  // Carrega lista de pedidos sob demanda direto do Supabase para o painel administrativo
+  const loadAdminOrders = useCallback(async () => {
+    if (!isSupabaseConfigured) return
+    try {
+      const dbOrders = await fetchOrdersFromDb()
+      if (Array.isArray(dbOrders) && dbOrders.length > 0) {
+        setOrders(dbOrders)
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar pedidos admin do Supabase:', err)
+    }
+  }, [])
+
+  // === Customer Authentication Methods (Seguro & Pontual) ===
+  const loginCustomer = useCallback(async (loginIdentifier, password) => {
     const cleanId = (loginIdentifier || '').trim().toLowerCase()
     const cleanDigits = (loginIdentifier || '').replace(/\D/g, '')
 
-    // Encontra o cliente por e-mail ou por CPF
-    const found = customers.find(c => {
+    // 1. Tenta achar no estado local existente
+    let found = customers.find(c => {
       const matchEmail = c.email && c.email.toLowerCase() === cleanId
       const matchCpf = cleanDigits && c.cpf && c.cpf.replace(/\D/g, '') === cleanDigits
       return matchEmail || matchCpf
     })
 
+    // 2. Se não estiver no cache local, busca pontualmente apenas este registro no Supabase
+    if (!found && isSupabaseConfigured) {
+      found = await findCustomerByCredentials(loginIdentifier)
+    }
+
     if (!found) {
       return { success: false, error: 'Cadastro não localizado com este E-mail ou CPF.' }
     }
 
-    // Validação de senha (se o cliente tiver senha cadastrada)
-    if (found.password && found.password !== password) {
+    // 3. Validação segura de senha com hash
+    const isPasswordValid = await verifyCustomerPassword(password, found.password)
+    if (!isPasswordValid) {
       return { success: false, error: 'Senha incorreta. Verifique e tente novamente.' }
+    }
+
+    // 4. Migração transparente: se a senha for legada (texto puro), atualiza para hash seguro
+    if (found.password && !found.password.startsWith('sha256_') && isSupabaseConfigured) {
+      const newHash = await hashCustomerPassword(password)
+      found.password = newHash
+      upsertCustomerToDb({ ...found, password: newHash }).catch(() => {})
     }
 
     const session = {
@@ -669,11 +714,11 @@ export function StoreProvider({ children }) {
     return { success: true, customer: found }
   }, [customers, showToast])
 
-  const registerCustomer = useCallback((newCustomerData) => {
+  const registerCustomer = useCallback(async (newCustomerData) => {
     const cleanEmail = (newCustomerData.email || '').trim().toLowerCase()
     const cleanCpfDigits = (newCustomerData.cpf || '').replace(/\D/g, '')
 
-    // Verifica se já existe
+    // Verifica se já existe localmente
     const exists = customers.find(c => {
       const matchEmail = cleanEmail && c.email && c.email.toLowerCase() === cleanEmail
       const matchCpf = cleanCpfDigits && c.cpf && c.cpf.replace(/\D/g, '') === cleanCpfDigits
@@ -687,10 +732,24 @@ export function StoreProvider({ children }) {
       }
     }
 
+    // Se tiver no Supabase, valida unicidade
+    if (isSupabaseConfigured) {
+      const existingInDb = await findCustomerByCredentials(cleanEmail)
+      if (existingInDb) {
+        return {
+          success: false,
+          error: 'Já existe um cadastro com este E-mail. Por favor, acesse a aba Entrar.'
+        }
+      }
+    }
+
+    const hashedPassword = await hashCustomerPassword(newCustomerData.password)
+
     const created = {
       id: 'cust_' + Date.now(),
       createdAt: new Date().toISOString(),
       ...newCustomerData,
+      password: hashedPassword,
       email: cleanEmail
     }
 
@@ -1242,7 +1301,7 @@ export function StoreProvider({ children }) {
     // Products
     addProduct, updateProduct, deleteProduct, clearAllProducts,
     // Orders
-    createOrder, updateOrderStatus, deleteOrder,
+    createOrder, updateOrderStatus, deleteOrder, loadAdminOrders,
     // Admin & Auth
     isAdmin, adminSession, adminConfig, globalTaxRate: adminConfig.globalTaxRate ?? 10,
     loginAdmin, logoutAdmin, changeAdminPassword, updateGlobalTaxRate,
@@ -1250,6 +1309,7 @@ export function StoreProvider({ children }) {
     isCustomerLoggedIn,
     customerSession,
     customers,
+    loadAdminCustomers,
     loginCustomer,
     registerCustomer,
     logoutCustomer,

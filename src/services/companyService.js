@@ -22,7 +22,42 @@ export const DEFAULT_COMPANY_DATA = {
   logo: '', // Se vazio, usa a logo padrão do assets ou exibe o nome em texto
   logoAlt: 'Minha Loja',
   favicon: '/favicon.jpg',
-  descricaoCurta: 'Sua loja online com frete rápido e atendimento especializado.'
+  descricaoCurta: 'Sua loja online com frete rápido e atendimento especializado.',
+  corPrimaria: '#84CC16'
+}
+
+/**
+ * Aplica as variáveis CSS de cor da marca (:root) dinamicamente na página.
+ * Permite que clientes de revenda white-label personalizem a identidade visual inteira
+ * da loja (botões, badges, luzes/glow e bordas) sem editar uma linha de código.
+ */
+export function applyBrandThemeColor(hexColor) {
+  if (!hexColor || typeof window === 'undefined') return
+  const hex = String(hexColor).trim()
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return
+
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+
+  // Calcula tom mais escuro (aprox. 75% da luminância) para estados de hover
+  const darkR = Math.round(r * 0.75).toString(16).padStart(2, '0')
+  const darkG = Math.round(g * 0.75).toString(16).padStart(2, '0')
+  const darkB = Math.round(b * 0.75).toString(16).padStart(2, '0')
+  const darkHex = `#${darkR}${darkG}${darkB}`
+
+  // Calcula tom mais claro (aprox. +25% de brilho) para foco e highlights
+  const lightR = Math.round(r + (255 - r) * 0.25).toString(16).padStart(2, '0')
+  const lightG = Math.round(g + (255 - g) * 0.25).toString(16).padStart(2, '0')
+  const lightB = Math.round(b + (255 - b) * 0.25).toString(16).padStart(2, '0')
+  const lightHex = `#${lightR}${lightG}${lightB}`
+
+  const root = document.documentElement
+  root.style.setProperty('--lime', hex)
+  root.style.setProperty('--lime-dark', darkHex)
+  root.style.setProperty('--lime-light', lightHex)
+  root.style.setProperty('--lime-glow', `rgba(${r}, ${g}, ${b}, 0.15)`)
+  root.style.setProperty('--lime-glow-strong', `rgba(${r}, ${g}, ${b}, 0.35)`)
 }
 
 

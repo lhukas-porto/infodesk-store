@@ -9,16 +9,18 @@ import ProductCard from './components/ProductCard'
 import ProductModal from './components/ProductModal'
 import CartDrawer from './components/CartDrawer'
 import CheckoutModal from './components/CheckoutModal'
-import CustomerAccountModal from './components/CustomerAccountModal'
-import AdminLoginModal from './components/AdminLoginModal'
-import AdminDashboard from './components/AdminDashboard'
-import BarcodeScannerModal from './components/BarcodeScannerModal'
 import TrustBar from './components/TrustBar'
 import BrandCarousel from './components/BrandCarousel'
 import ProductSortFilter from './components/ProductSortFilter'
 import CepModal from './components/CepModal'
-import TrackingModal from './components/TrackingModal'
-import PaymentReturnModal from './components/PaymentReturnModal'
+
+// Code-Splitting Dinâmico (React.lazy): Modais pesados carregados sob demanda
+const CustomerAccountModal = React.lazy(() => import('./components/CustomerAccountModal'))
+const AdminLoginModal = React.lazy(() => import('./components/AdminLoginModal'))
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard'))
+const BarcodeScannerModal = React.lazy(() => import('./components/BarcodeScannerModal'))
+const TrackingModal = React.lazy(() => import('./components/TrackingModal'))
+const PaymentReturnModal = React.lazy(() => import('./components/PaymentReturnModal'))
 import { resolveCurrentTenant } from './services/tenantResolver'
 import { getMarketingSettings } from './services/marketingService'
 import { applyStoreSeo } from './services/seoManager'
@@ -230,22 +232,26 @@ export default function App() {
       <ProductModal />
       <CartDrawer />
       <CheckoutModal />
-      <CustomerAccountModal />
-      <AdminLoginModal />
-      <AdminDashboard />
-      <BarcodeScannerModal />
       <CepModal />
-      <TrackingModal />
-      {paymentReturnInfo && (
-        <PaymentReturnModal
-          orderId={paymentReturnInfo.orderId}
-          statusParam={paymentReturnInfo.status}
-          onClose={() => {
-            setPaymentReturnInfo(null)
-            window.location.hash = ''
-          }}
-        />
-      )}
+
+      {/* Modais Pesados carregados sob demanda com Suspense */}
+      <React.Suspense fallback={null}>
+        <CustomerAccountModal />
+        <AdminLoginModal />
+        <AdminDashboard />
+        <BarcodeScannerModal />
+        <TrackingModal />
+        {paymentReturnInfo && (
+          <PaymentReturnModal
+            orderId={paymentReturnInfo.orderId}
+            statusParam={paymentReturnInfo.status}
+            onClose={() => {
+              setPaymentReturnInfo(null)
+              window.location.hash = ''
+            }}
+          />
+        )}
+      </React.Suspense>
 
       {/* Toast */}
       {toast && (

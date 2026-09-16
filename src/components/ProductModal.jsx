@@ -35,7 +35,7 @@ export default function ProductModal() {
   }, [product, companyData])
 
   const handleCopyProductLink = () => {
-    const rawUrl = `${window.location.origin}/#product-${product.slug || product.id}`
+    const rawUrl = `${window.location.origin}/p/${product.slug || product.id}`
     const utmUrl = buildUtmUrl(rawUrl, {
       utm_source: 'share_direct',
       utm_medium: 'referral',
@@ -48,7 +48,7 @@ export default function ProductModal() {
   }
 
   const handleShareWhatsApp = () => {
-    const rawUrl = `${window.location.origin}/#product-${product.slug || product.id}`
+    const rawUrl = `${window.location.origin}/p/${product.slug || product.id}`
     const utmUrl = buildUtmUrl(rawUrl, {
       utm_source: 'whatsapp',
       utm_medium: 'social_share',

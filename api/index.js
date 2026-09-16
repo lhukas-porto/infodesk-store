@@ -55,6 +55,9 @@ async function getHandler(path) {
   if (path.startsWith('/api/google-merchant/feed') || path === '/api/google-merchant/feed.xml') {
     return (await import('../lib/api/google-merchant/feed.js')).default
   }
+  if (path.startsWith('/p/') || path.startsWith('/produto/') || path.startsWith('/api/seo/share')) {
+    return (await import('../lib/api/seo/og-injector.js')).default
+  }
   return null
 }
 

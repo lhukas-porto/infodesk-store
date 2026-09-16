@@ -4,9 +4,11 @@ import {
   Pencil, Trash2, Camera, LogOut, TrendingUp, AlertTriangle, Search,
   Shield, KeyRound, User, Users, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
   Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
-  MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase, CreditCard
+  MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase, CreditCard,
+  Check, Bell
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient'
 import { generateValidEan13 } from '../services/barcodeService'
 import {
   roundCommercialPrice,
@@ -33,15 +35,65 @@ import {
   isValidCnpj,
   isValidEmail,
   isValidUrl,
-  getCompanyPublicName
+  getCompanyPublicName,
+  applyBrandThemeColor
 } from '../services/companyService'
+
+// Paletas de cores premium para customização White-Label instantânea da vitrine
+const PRESET_BRAND_COLORS = [
+  { name: 'Verde Tech (Padrão)', hex: '#84CC16', border: '#65A30D' },
+  { name: 'Azul Elétrico', hex: '#0284C7', border: '#0369A1' },
+  { name: 'Indigo Cyber', hex: '#6366F1', border: '#4F46E5' },
+  { name: 'Roxo Neon', hex: '#8B5CF6', border: '#7C3AED' },
+  { name: 'Esmeralda', hex: '#10B981', border: '#059669' },
+  { name: 'Laranja Sunset', hex: '#F97316', border: '#EA580C' },
+  { name: 'Vermelho Carmim', hex: '#E11D48', border: '#BE123C' },
+  { name: 'Âmbar Dourado', hex: '#D97706', border: '#B45309' }
+]
+
+// Síntese de áudio nativa via Web Audio API para alerta sonoro de venda
+function playSaleSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const now = ctx.currentTime
+
+    const osc1 = ctx.createOscillator()
+    const osc2 = ctx.createOscillator()
+    const gain = ctx.createGain()
+
+    osc1.type = 'triangle'
+    osc2.type = 'sine'
+
+    osc1.frequency.setValueAtTime(587.33, now) // D5
+    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.12) // A5
+
+    osc2.frequency.setValueAtTime(880, now) // A5
+    osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.12) // D6
+
+    gain.gain.setValueAtTime(0.25, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+
+    osc1.connect(gain)
+    osc2.connect(gain)
+    gain.connect(ctx.destination)
+
+    osc1.start(now)
+    osc2.start(now)
+    osc1.stop(now + 0.45)
+    osc2.stop(now + 0.45)
+  } catch {
+    // Silencioso se navegador restringir autoplay
+  }
+}
 
 export default function AdminDashboard() {
   const {
     showAdminDashboard, setShowAdminDashboard,
     products, orders, customers = [], logoutAdmin,
     addProduct, updateProduct, deleteProduct, clearAllProducts,
-    updateOrderStatus, deleteOrder, setShowScanner, showToast,
+    updateOrderStatus, deleteOrder, loadAdminOrders, setShowScanner, showToast,
     adminSession, adminConfig, changeAdminPassword,
     globalTaxRate, updateGlobalTaxRate,
     openTrackingModal,
@@ -85,6 +137,110 @@ export default function AdminDashboard() {
   const [orderToEditTracking, setOrderToEditTracking] = useState(null)
   const [trackingCodeInput, setTrackingCodeInput] = useState('')
   const [productSearch, setProductSearch] = useState('')
+
+  // Filtros avançados na gestão de pedidos
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all')
+  const [orderSearch, setOrderSearch] = useState('')
+
+  // Edição rápida de preço e estoque na tabela de produtos
+  const [quickEdits, setQuickEdits] = useState({}) // { [id]: { price, stock, saved: boolean } }
+
+  // Supabase Realtime: Notificação sonora e atualização instantânea de vendas
+  useEffect(() => {
+    if (!showAdminDashboard) return
+    if (loadAdminOrders) {
+      loadAdminOrders()
+    }
+
+    if (!isSupabaseConfigured || !supabase) return
+
+    const channel = supabase
+      .channel('admin-dashboard-realtime-orders')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          if (payload?.new) {
+            playSaleSound()
+            const totalFmt = Number(payload.new.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            showToast(`🔔 Nova Venda! Pedido #${payload.new.id} de ${totalFmt}! 🎉`, 'success')
+            if (loadAdminOrders) loadAdminOrders()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders' },
+        (payload) => {
+          if (payload?.new) {
+            if (payload.new.status === 'Pago') {
+              playSaleSound()
+              showToast(`💰 Pagamento Confirmado! Pedido #${payload.new.id} aprovado com sucesso!`, 'success')
+            }
+            if (loadAdminOrders) loadAdminOrders()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [showAdminDashboard, loadAdminOrders, showToast])
+
+  const handleQuickPriceChange = (productId, val) => {
+    setQuickEdits(prev => ({
+      ...prev,
+      [productId]: { ...(prev[productId] || {}), price: val }
+    }))
+  }
+
+  const handleQuickPriceSave = (product) => {
+    const editVal = quickEdits[product.id]?.price
+    if (editVal === undefined || editVal === '') return
+    const num = parseFloat(String(editVal).replace(',', '.'))
+    if (!isNaN(num) && num >= 0 && num !== product.price) {
+      updateProduct(product.id, { price: num })
+      setQuickEdits(prev => ({
+        ...prev,
+        [product.id]: { ...(prev[product.id] || {}), saved: true }
+      }))
+      setTimeout(() => {
+        setQuickEdits(prev => ({
+          ...prev,
+          [product.id]: { ...(prev[product.id] || {}), saved: false }
+        }))
+      }, 1500)
+      showToast(`Preço de "${product.name}" atualizado para R$ ${num.toFixed(2).replace('.', ',')}! ✅`)
+    }
+  }
+
+  const handleQuickStockChange = (productId, val) => {
+    setQuickEdits(prev => ({
+      ...prev,
+      [productId]: { ...(prev[productId] || {}), stock: val }
+    }))
+  }
+
+  const handleQuickStockSave = (product) => {
+    const editVal = quickEdits[product.id]?.stock
+    if (editVal === undefined || editVal === '') return
+    const num = parseInt(editVal, 10)
+    if (!isNaN(num) && num >= 0 && num !== product.stock) {
+      updateProduct(product.id, { stock: num })
+      setQuickEdits(prev => ({
+        ...prev,
+        [product.id]: { ...(prev[product.id] || {}), saved: true }
+      }))
+      setTimeout(() => {
+        setQuickEdits(prev => ({
+          ...prev,
+          [product.id]: { ...(prev[product.id] || {}), saved: false }
+        }))
+      }, 1500)
+      showToast(`Estoque de "${product.name}" atualizado para ${num} un.! ✅`)
+    }
+  }
 
   // Global tax input state
   const [taxInput, setTaxInput] = useState(globalTaxRate ?? 10)
@@ -378,6 +534,27 @@ export default function AdminDashboard() {
              (p.ean && p.ean.includes(q))
     })
   }, [products, productSearch])
+
+  // Contadores e filtragem de pedidos para gestão e recuperação de vendas
+  const pendingOrdersCount = useMemo(() => orders.filter(o => o.status === 'Pendente').length, [orders])
+  const paidOrdersCount = useMemo(() => orders.filter(o => o.status === 'Pago').length, [orders])
+  const processingOrdersCount = useMemo(() => orders.filter(o => o.status === 'Em Separação').length, [orders])
+  const shippedOrdersCount = useMemo(() => orders.filter(o => o.status === 'Enviado').length, [orders])
+  const deliveredOrdersCount = useMemo(() => orders.filter(o => o.status === 'Entregue').length, [orders])
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const matchStatus = orderStatusFilter === 'all' || o.status === orderStatusFilter
+      if (!matchStatus) return false
+      if (!orderSearch.trim()) return true
+      const q = orderSearch.toLowerCase().trim()
+      const idMatch = (o.id || '').toLowerCase().includes(q)
+      const nameMatch = (o.cliente?.nome || o.customerName || '').toLowerCase().includes(q)
+      const phoneMatch = (o.cliente?.telefone || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''))
+      const cityMatch = (o.cliente?.cidade || '').toLowerCase().includes(q)
+      return idMatch || nameMatch || phoneMatch || cityMatch
+    })
+  }, [orders, orderStatusFilter, orderSearch])
 
   const handleSaveCorreios = async (e) => {
     e?.preventDefault()
@@ -1428,20 +1605,74 @@ export default function AdminDashboard() {
                           <td style={{ color: 'var(--dark-500)' }}>
                             R$ {(parseFloat(p.costPrice) || 0).toFixed(2).replace('.', ',')}
                           </td>
-                          <td>
-                            <strong className="price-current" style={{ fontSize: 'var(--text-sm)' }}>
-                              R$ {(parseFloat(p.price) || 0).toFixed(2).replace('.', ',')}
-                            </strong>
+                          <td style={{ minWidth: 140 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: '11px', color: 'var(--dark-500)', fontWeight: 600 }}>R$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="input-field"
+                                value={quickEdits[p.id]?.price !== undefined ? quickEdits[p.id].price : p.price}
+                                onChange={e => handleQuickPriceChange(p.id, e.target.value)}
+                                onBlur={() => handleQuickPriceSave(p)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    handleQuickPriceSave(p)
+                                    e.target.blur()
+                                  }
+                                }}
+                                style={{
+                                  width: '90px',
+                                  padding: '4px 6px',
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  color: 'var(--dark-900)',
+                                  borderColor: quickEdits[p.id]?.saved ? '#16a34a' : 'var(--dark-200)',
+                                  background: quickEdits[p.id]?.saved ? '#f0fdf4' : '#ffffff'
+                                }}
+                                title="Edite o preço e tecle Enter para salvar"
+                              />
+                              {quickEdits[p.id]?.saved && (
+                                <Check size={14} style={{ color: '#16a34a' }} />
+                              )}
+                            </div>
                             {p.originalPrice && (
-                              <span style={{ display: 'block', fontSize: '11px', color: 'var(--dark-400)', textDecoration: 'line-through' }}>
-                                R$ {(parseFloat(p.originalPrice) || 0).toFixed(2).replace('.', ',')}
+                              <span style={{ display: 'block', fontSize: '11px', color: 'var(--dark-400)', textDecoration: 'line-through', marginTop: 2 }}>
+                                De: R$ {(parseFloat(p.originalPrice) || 0).toFixed(2).replace('.', ',')}
                               </span>
                             )}
                           </td>
-                          <td>
-                            <span className={p.stock <= 0 ? 'badge badge-red' : p.stock <= 5 ? 'badge badge-amber' : 'badge badge-lime'}>
-                              {p.stock} un.
-                            </span>
+                          <td style={{ minWidth: 100 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                type="number"
+                                min="0"
+                                className="input-field"
+                                value={quickEdits[p.id]?.stock !== undefined ? quickEdits[p.id].stock : p.stock}
+                                onChange={e => handleQuickStockChange(p.id, e.target.value)}
+                                onBlur={() => handleQuickStockSave(p)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    handleQuickStockSave(p)
+                                    e.target.blur()
+                                  }
+                                }}
+                                style={{
+                                  width: '64px',
+                                  padding: '4px 6px',
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  borderColor: quickEdits[p.id]?.saved ? '#16a34a' : (p.stock <= 0 ? 'var(--red)' : p.stock <= 5 ? 'var(--amber)' : 'var(--dark-200)'),
+                                  background: quickEdits[p.id]?.saved ? '#f0fdf4' : '#ffffff'
+                                }}
+                                title="Edite o estoque e tecle Enter para salvar"
+                              />
+                              <span style={{ fontSize: '11px', color: 'var(--dark-400)' }}>un.</span>
+                              {quickEdits[p.id]?.saved && (
+                                <Check size={14} style={{ color: '#16a34a' }} />
+                              )}
+                            </div>
                           </td>
                           <td>
                             {p.featured ? (
@@ -1494,17 +1725,133 @@ export default function AdminDashboard() {
           {/* Orders */}
           {tab === 'orders' && (
             <div>
+              {/* Barra de Filtros Rápidos por Status e Busca */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${orderStatusFilter === 'all' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setOrderStatusFilter('all')}
+                  >
+                    Todos ({orders.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${orderStatusFilter === 'Pendente' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setOrderStatusFilter('Pendente')}
+                    style={orderStatusFilter === 'Pendente' ? { background: '#ca8a04', borderColor: '#ca8a04', color: '#fff' } : { borderColor: '#fde047', color: '#854d0e' }}
+                  >
+                    ⏳ Pendentes ({pendingOrdersCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${orderStatusFilter === 'Pago' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setOrderStatusFilter('Pago')}
+                    style={orderStatusFilter === 'Pago' ? { background: '#16a34a', borderColor: '#16a34a', color: '#fff' } : { borderColor: '#86efac', color: '#166534' }}
+                  >
+                    ✓ Pagos ({paidOrdersCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${orderStatusFilter === 'Em Separação' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setOrderStatusFilter('Em Separação')}
+                  >
+                    📦 Em Separação ({processingOrdersCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${orderStatusFilter === 'Enviado' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setOrderStatusFilter('Enviado')}
+                  >
+                    🚚 Enviados ({shippedOrdersCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${orderStatusFilter === 'Entregue' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setOrderStatusFilter('Entregue')}
+                  >
+                    🎉 Entregues ({deliveredOrdersCount})
+                  </button>
+                </div>
+
+                <div className="adm-search-input-wrap" style={{ maxWidth: '320px', margin: 0 }}>
+                  <Search size={16} className="adm-search-icon" />
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Buscar pedido, cliente, tel..."
+                    value={orderSearch}
+                    onChange={e => setOrderSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Banner de Recuperação de Carrinho Abandonado */}
+              {pendingOrdersCount > 0 && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12), rgba(245, 158, 11, 0.04))',
+                  border: '1px solid rgba(234, 179, 8, 0.35)',
+                  borderRadius: '12px',
+                  padding: '14px 18px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#fef08a', color: '#854d0e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Sparkles size={20} />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: '13.5px', color: '#713f12', display: 'block' }}>
+                        Recuperação de Carrinho Abandonado (1-Click)
+                      </strong>
+                      <span style={{ fontSize: '12px', color: '#854d0e' }}>
+                        Você possui <strong>{pendingOrdersCount} {pendingOrdersCount > 1 ? 'pedidos aguardando pagamento' : 'pedido aguardando pagamento'}</strong>. Envie um lembrete empático via WhatsApp com a chave Pix ou desconto para fechar a venda!
+                      </span>
+                    </div>
+                  </div>
+                  {orderStatusFilter !== 'Pendente' && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setOrderStatusFilter('Pendente')}
+                      style={{ borderColor: '#ca8a04', color: '#854d0e', fontWeight: 600, background: '#ffffff' }}
+                    >
+                      Ver {pendingOrdersCount} Pendentes
+                    </button>
+                  )}
+                </div>
+              )}
+
               {orders.length === 0 ? (
                 <div className="empty-state">
                   <ShoppingCart size={48} />
                   <p>Nenhum pedido registrado</p>
+                </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px' }}>
+                  <Search size={40} style={{ color: 'var(--dark-400)', marginBottom: 8 }} />
+                  <p style={{ fontWeight: 600, color: 'var(--dark-700)' }}>Nenhum pedido encontrado com este filtro.</p>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setOrderStatusFilter('all'); setOrderSearch(''); }}>
+                    Limpar Filtros
+                  </button>
                 </div>
               ) : (
                 <div className="adm-table-wrap">
                   <table className="adm-table">
                     <thead><tr><th>Pedido</th><th>Data</th><th>Cliente</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Ações</th></tr></thead>
                     <tbody>
-                      {orders.map(o => (
+                      {filteredOrders.map(o => (
                         <tr key={o.id}>
                           <td><strong>{o.id}</strong></td>
                           <td>{new Date(o.date).toLocaleDateString('pt-BR')}</td>
@@ -1590,7 +1937,7 @@ export default function AdminDashboard() {
                                 </button>
                               )}
 
-                              {/* Botão WhatsApp 1-Click para comunicação com o cliente */}
+                              {/* Botão WhatsApp 1-Click para comunicação e recuperação de carrinho */}
                               {o.cliente?.telefone && (
                                 <button
                                   type="button"
@@ -1610,23 +1957,24 @@ export default function AdminDashboard() {
                                     const link = createWhatsAppLink(o.cliente.telefone, msg)
                                     window.open(link, '_blank', 'noopener,noreferrer')
                                   }}
-                                  title={`Enviar notificação via WhatsApp (${o.status === 'Pendente' ? 'Lembrete de Pagamento' : o.status === 'Enviado' ? 'Código de Rastreio' : 'Atualização'})`}
+                                  title={`Enviar notificação via WhatsApp (${o.status === 'Pendente' ? 'Recuperação de Carrinho Abandonado' : o.status === 'Enviado' ? 'Código de Rastreio' : 'Atualização'})`}
                                   style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 4,
-                                    background: '#25D366',
+                                    background: o.status === 'Pendente' ? '#16a34a' : '#25D366',
                                     color: '#ffffff',
                                     border: 'none',
-                                    padding: '4px 8px',
+                                    padding: o.status === 'Pendente' ? '5px 10px' : '4px 8px',
                                     borderRadius: '6px',
-                                    fontWeight: 600,
+                                    fontWeight: 700,
                                     fontSize: '11px',
-                                    cursor: 'pointer'
+                                    cursor: 'pointer',
+                                    boxShadow: o.status === 'Pendente' ? '0 2px 6px rgba(22, 163, 74, 0.3)' : 'none'
                                   }}
                                 >
                                   <MessageCircle size={13} />
-                                  <span>WhatsApp</span>
+                                  <span>{o.status === 'Pendente' ? 'Recuperar no Zap' : 'WhatsApp'}</span>
                                 </button>
                               )}
 
@@ -2232,6 +2580,116 @@ export default function AdminDashboard() {
                             ⚠️ {logoError}
                           </span>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Paleta de Cores da Marca / White-Label */}
+                    <div style={{
+                      padding: '16px',
+                      background: 'var(--dark-50)',
+                      borderRadius: '12px',
+                      border: '1px solid var(--dark-200)',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                        <div>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark-800)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            🎨 Cor Principal da Marca (Tema da Loja / White-Label)
+                          </span>
+                          <p style={{ fontSize: '11px', color: 'var(--dark-500)', margin: '2px 0 0 0' }}>
+                            Altera instantaneamente os botões, realces, ícones e destaques da vitrine inteira para a cor da sua identidade visual.
+                          </p>
+                        </div>
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          background: '#fff',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#334155'
+                        }}>
+                          <span style={{
+                            width: '14px',
+                            height: '14px',
+                            borderRadius: '50%',
+                            backgroundColor: companyForm.corPrimaria || '#84CC16',
+                            display: 'inline-block',
+                            boxShadow: '0 0 6px rgba(0,0,0,0.15)'
+                          }} />
+                          <span style={{ fontFamily: 'monospace' }}>{companyForm.corPrimaria || '#84CC16'}</span>
+                        </div>
+                      </div>
+
+                      {/* Bolinhas de cores pré-selecionadas */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                        {PRESET_BRAND_COLORS.map(c => {
+                          const isSelected = (companyForm.corPrimaria || '#84CC16').toLowerCase() === c.hex.toLowerCase()
+                          return (
+                            <button
+                              key={c.hex}
+                              type="button"
+                              title={c.name}
+                              onClick={() => {
+                                setCompanyForm(prev => ({ ...prev, corPrimaria: c.hex }))
+                                applyBrandThemeColor(c.hex)
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '5px 10px',
+                                borderRadius: '20px',
+                                border: isSelected ? `2px solid ${c.border}` : '1px solid #cbd5e1',
+                                background: isSelected ? '#ffffff' : '#f8fafc',
+                                boxShadow: isSelected ? `0 0 0 2px ${c.hex}40` : 'none',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span style={{
+                                width: '13px',
+                                height: '13px',
+                                borderRadius: '50%',
+                                backgroundColor: c.hex,
+                                display: 'inline-block'
+                              }} />
+                              <span style={{ fontSize: '11px', fontWeight: isSelected ? 700 : 500, color: isSelected ? '#0f172a' : '#475569' }}>
+                                {c.name.split(' (')[0]}
+                              </span>
+                            </button>
+                          )
+                        })}
+
+                        {/* Seletor Customizado Nativo */}
+                        <label style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '5px 10px',
+                          borderRadius: '20px',
+                          border: '1px dashed #94a3b8',
+                          background: '#fff',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          color: '#475569',
+                          fontWeight: 600
+                        }}>
+                          <input
+                            type="color"
+                            value={companyForm.corPrimaria || '#84CC16'}
+                            onChange={e => {
+                              const val = e.target.value
+                              setCompanyForm(prev => ({ ...prev, corPrimaria: val }))
+                              applyBrandThemeColor(val)
+                            }}
+                            style={{ width: '16px', height: '16px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
+                          />
+                          <span>Outra cor...</span>
+                        </label>
                       </div>
                     </div>
 

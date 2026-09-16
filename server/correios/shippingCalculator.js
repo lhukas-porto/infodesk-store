@@ -2,28 +2,85 @@
 import initialProducts from '../../src/data/initialProducts.js'
 import { quoteShipping } from './correiosClient.js'
 import { calculatePackage } from './packagePacker.js'
+import { createClient } from '@supabase/supabase-js'
 
-// Cache de produtos em memória para resolução rápida no backend
-const productsMap = new Map()
-initialProducts.forEach(p => productsMap.set(p.id, p))
+// Cache de produtos em memória com TTL de 30 minutos
+const productsCache = new Map()
+// Seed inicial com initialProducts como base de contingência
+initialProducts.forEach(p => productsCache.set(String(p.id), { ...p, cachedAt: Date.now() }))
+
+function getSupabase() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  if (!url || !key) return null
+  return createClient(url, key)
+}
 
 /**
  * Enriquece os itens do pedido com as propriedades físicas reais do catálogo (peso e dimensões)
- * O frontend nunca pode injetar pesos ou preços falsos.
- * @param {Array<{ productId?: string, id?: string, quantity?: number, qty?: number }>} rawItems
- * @returns {Array} Itens validados com dados reais
+ * Busca tanto no cache quanto diretamente no banco Supabase se for um produto novo.
  */
-export function enrichItemsWithRealData(rawItems = []) {
+export async function enrichItemsWithRealData(rawItems = []) {
+  const supabase = getSupabase()
+  const missingIds = []
+
+  // 1. Identifica itens ausentes no cache ou com cache expirado (TTL 30min)
+  for (const item of rawItems) {
+    const pId = String(item.productId || item.id || '')
+    const cached = productsCache.get(pId)
+    if (!cached || (Date.now() - (cached.cachedAt || 0) > 30 * 60 * 1000)) {
+      if (pId) missingIds.push(pId)
+    }
+  }
+
+  // 2. Busca dados reais no Supabase para novos produtos
+  if (supabase && missingIds.length > 0) {
+    try {
+      const { data: dbProducts } = await supabase
+        .from('products')
+        .select('id, name, price, specs')
+        .in('id', missingIds)
+
+      if (dbProducts && dbProducts.length > 0) {
+        dbProducts.forEach(p => {
+          const specs = Array.isArray(p.specs) ? p.specs : []
+          const weightSpec = specs.find(s => /peso/i.test(s.label || ''))?.value
+          let weight_g = 500
+
+          if (weightSpec) {
+            const num = parseFloat(String(weightSpec).replace(',', '.'))
+            if (!isNaN(num)) {
+              if (/kg/i.test(weightSpec)) weight_g = Math.round(num * 1000)
+              else if (/g/i.test(weightSpec)) weight_g = Math.round(num)
+            }
+          }
+
+          productsCache.set(String(p.id), {
+            id: p.id,
+            name: p.name,
+            price: parseFloat(p.price) || 0,
+            weight: weight_g,
+            length: 20,
+            width: 15,
+            height: 10,
+            cachedAt: Date.now()
+          })
+        })
+      }
+    } catch (err) {
+      console.warn('Erro ao sincronizar produtos reais no frete:', err.message)
+    }
+  }
+
   return rawItems.map(item => {
-    const pId = item.productId || item.id
+    const pId = String(item.productId || item.id || '')
     const qty = Math.max(1, parseInt(item.quantity || item.qty, 10) || 1)
-    const product = productsMap.get(pId)
+    const product = productsCache.get(pId)
 
     if (!product) {
-      // Produto não encontrado no catálogo estático: utiliza valores de segurança
       return {
         id: pId,
-        name: item.name || 'Produto Infodesk',
+        name: item.name || 'Produto',
         price: parseFloat(item.price) || 0,
         weight: item.weight || item.weight_g || 500,
         length: item.length || item.length_cm || 20,
@@ -37,31 +94,28 @@ export function enrichItemsWithRealData(rawItems = []) {
       id: product.id,
       name: product.name,
       price: product.price,
-      weight: product.weight || product.weight_g || 500,
-      length: product.length || product.length_cm || 20,
-      width: product.width || product.width_cm || 15,
-      height: product.height || product.height_cm || 10,
+      weight: product.weight || 500,
+      length: product.length || 20,
+      width: product.width || 15,
+      height: product.height || 10,
       quantity: qty
     }
   })
 }
 
 /**
- * Calcula a cotação de frete oficial a partir de itens brutos recebidos do cliente
+ * Calcula a cotação de frete oficial a partir de itens enriquecidos com o banco
  */
 export async function calculateShippingForCart(cepDestino, rawItems = []) {
-  const enrichedItems = enrichItemsWithRealData(rawItems)
+  const enrichedItems = await enrichItemsWithRealData(rawItems)
   return await quoteShipping(cepDestino, enrichedItems)
 }
 
 /**
  * Validação de segurança anti-fraude no fechamento do pedido
- * Garante que o valor e a modalidade de frete declarados pelo navegador correspondem à cotação real do backend.
- * @param {{ cepDestino: string, items: Array, selectedServiceId: string, claimedShippingPrice: number }} payload
- * @returns {Promise<{ valid: boolean, realShippingPrice: number, realService: object, subtotal: number, total: number, error?: string }>}
  */
 export async function validateOrderShipping({ cepDestino, items, selectedServiceId, claimedShippingPrice }) {
-  const enrichedItems = enrichItemsWithRealData(items)
+  const enrichedItems = await enrichItemsWithRealData(items)
   const realSubtotal = enrichedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
 
   // Cotação no backend

@@ -298,3 +298,34 @@ export function createAnonymizedCustomerPayload(customer) {
     anonymized_at: new Date().toISOString()
   }
 }
+
+/**
+ * Hasheia a senha do cliente usando Web Crypto API SHA-256 com salt seguro
+ */
+export async function hashCustomerPassword(plainPassword) {
+  if (!plainPassword) return ''
+  const salt = 'infodesk_sec_v1_store'
+  try {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(plainPassword + salt)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return 'sha256_' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  } catch (err) {
+    console.warn('Fallback de hash:', err)
+    return 'sha256_' + btoa(plainPassword + salt)
+  }
+}
+
+/**
+ * Valida a senha digitada comparando com o hash ou aceitando migração de senha legada
+ */
+export async function verifyCustomerPassword(inputPassword, storedPasswordOrHash) {
+  if (!inputPassword || !storedPasswordOrHash) return false
+  if (storedPasswordOrHash.startsWith('sha256_')) {
+    const computed = await hashCustomerPassword(inputPassword)
+    return computed === storedPasswordOrHash
+  }
+  // Compatibilidade transitória com senhas cadastradas antes da criptografia
+  return inputPassword === storedPasswordOrHash
+}
