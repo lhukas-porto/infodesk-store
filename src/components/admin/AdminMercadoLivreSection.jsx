@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../../context/StoreContext'
 import { mercadoLivreService } from '../../services/mercadoLivreService'
+import AdminSectionHeader from './AdminSectionHeader'
 
 export default function AdminMercadoLivreSection() {
   const { products = [], showToast, updateProduct } = useStore()
@@ -86,129 +87,96 @@ export default function AdminMercadoLivreSection() {
   return (
     <div className="adm-mercadolivre-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* Top Banner Mercado Livre */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(255, 230, 0, 0.18), rgba(45, 50, 119, 0.04))',
-        border: '1px solid rgba(234, 179, 8, 0.35)',
-        borderRadius: 16,
-        padding: '24px 28px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{
-            width: 52,
-            height: 52,
-            borderRadius: 14,
-            background: '#FFE600',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#2D3277',
-            boxShadow: '0 4px 12px rgba(234, 179, 8, 0.25)',
-            flexShrink: 0
-          }}>
-            <Store size={28} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: 4 }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--dark-900, #0f172a)', fontWeight: 800 }}>
-                Integração Oficial com Mercado Livre
-              </h3>
-              {status.connected ? (
-                <span style={{
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  color: '#15803d',
-                  border: '1px solid rgba(34, 197, 94, 0.3)',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  padding: '3px 10px',
-                  borderRadius: 20,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4
-                }}>
-                  <CheckCircle2 size={13} /> Conectado ({status.nickname || 'LHUCAS'})
-                </span>
-              ) : (
-                <span style={{
-                  background: 'rgba(239, 68, 68, 0.12)',
-                  color: '#b91c1c',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  padding: '3px 10px',
-                  borderRadius: 20,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4
-                }}>
-                  <AlertTriangle size={13} /> Desconectado
-                </span>
-              )}
-            </div>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--dark-600, #475569)' }}>
-              Publique produtos diretamente do seu estoque para o Mercado Livre com sincronização em 1 clique.
-            </p>
-          </div>
-        </div>
-
-        {/* Botão de Conexão */}
-        <div>
-          {status.loading ? (
+      {/* Top Banner Mercado Livre Padronizado */}
+      <AdminSectionHeader
+        icon={Store}
+        iconColor="#2D3277"
+        iconBg="#FFE600"
+        title="Integração Oficial com Mercado Livre"
+        badge={
+          status.connected ? (
+            <span style={{
+              background: 'rgba(34, 197, 94, 0.15)',
+              color: '#15803d',
+              border: '1px solid rgba(34, 197, 94, 0.3)',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              padding: '3px 10px',
+              borderRadius: 20,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4
+            }}>
+              <CheckCircle2 size={13} /> Conectado ({status.nickname || 'LHUCAS'})
+            </span>
+          ) : (
+            <span style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#b91c1c',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              padding: '3px 10px',
+              borderRadius: 20,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4
+            }}>
+              <AlertTriangle size={13} /> Desconectado
+            </span>
+          )
+        }
+        description="Publique produtos diretamente do seu estoque para o Mercado Livre com sincronização em 1 clique."
+        actions={
+          status.loading ? (
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               disabled
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.875rem' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              <RefreshCw size={15} className="spin" /> Verificando...
+              <RefreshCw size={14} className="spin" /> Verificando...
             </button>
           ) : status.connected ? (
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               onClick={mercadoLivreService.connectAccount}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 8,
-                fontSize: '0.875rem',
+                gap: 6,
                 background: 'var(--white, #fff)',
                 border: '1px solid var(--dark-200, #e2e8f0)',
                 color: 'var(--dark-800, #1e293b)'
               }}
               title="Clique para renovar as credenciais ou trocar de conta"
             >
-              <RefreshCw size={15} /> Reconectar Conta
+              <RefreshCw size={14} /> Reconectar Conta
             </button>
           ) : (
             <button
               type="button"
-              className="btn"
+              className="btn btn-sm"
               style={{
                 background: '#FFE600',
                 color: '#2D3277',
                 fontWeight: 800,
                 border: '1px solid #eab308',
-                boxShadow: '0 4px 12px rgba(234, 179, 8, 0.25)',
+                boxShadow: '0 2px 8px rgba(234, 179, 8, 0.25)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 8,
-                fontSize: '0.875rem',
-                padding: '10px 18px',
-                borderRadius: 10
+                gap: 6,
+                padding: '8px 16px',
+                borderRadius: 8
               }}
               onClick={mercadoLivreService.connectAccount}
             >
-              <Store size={18} /> Conectar com Mercado Livre
+              <Store size={16} /> Conectar Mercado Livre
             </button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {/* Alerta caso desconectado */}
       {!status.connected && !status.loading && (

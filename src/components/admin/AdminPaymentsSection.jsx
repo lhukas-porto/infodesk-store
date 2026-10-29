@@ -5,6 +5,7 @@ import {
   Info, ShoppingCart, Zap, Clock
 } from 'lucide-react'
 import { useStore } from '../../context/StoreContext'
+import AdminSectionHeader from './AdminSectionHeader'
 
 export default function AdminPaymentsSection() {
   const { orders = [], showToast } = useStore()
@@ -52,58 +53,27 @@ export default function AdminPaymentsSection() {
 
   return (
     <div className="adm-payments-section" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Top Banner de Identificação */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(0, 158, 227, 0.08), rgba(0, 158, 227, 0.02))',
-        border: '1px solid rgba(0, 158, 227, 0.25)',
-        borderRadius: 16,
-        padding: '24px 28px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 16
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{
-            width: 52,
-            height: 52,
-            borderRadius: 14,
-            background: '#009ee3',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 8px 16px rgba(0, 158, 227, 0.3)'
-          }}>
-            <ShieldCheck size={30} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-              <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--dark-900)', fontWeight: 800 }}>
-                Mercado Pago Checkout Pro
-              </h3>
-              <span className="badge badge-cyan" style={{ fontSize: '11px', fontWeight: 700 }}>
-                Orders API v1 (Oficial Moderna)
-              </span>
-            </div>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--dark-600)' }}>
-              Integração ativa para pagamentos transparentes no checkout com PIX Instantâneo, Cartão de Crédito em até 12x e Boleto.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={checkConnection}
-          disabled={testingConnection}
-          style={{ background: '#009ee3', borderColor: '#009ee3', display: 'inline-flex', alignItems: 'center', gap: 8 }}
-        >
-          <RefreshCw size={15} className={testingConnection ? 'spin' : ''} />
-          {testingConnection ? 'Testando Conexão...' : 'Testar Conexão com MP'}
-        </button>
-      </div>
+      {/* Top Banner de Identificação Padronizado */}
+      <AdminSectionHeader
+        icon={CreditCard}
+        iconColor="#009ee3"
+        iconBg="rgba(0, 158, 227, 0.12)"
+        title="Mercado Pago Checkout Pro"
+        badge={<span className="badge badge-cyan" style={{ fontSize: '11px', fontWeight: 700 }}>Orders API v1</span>}
+        description="Integração ativa para pagamentos transparentes no checkout com PIX Instantâneo, Cartão de Crédito em até 12x e Boleto."
+        actions={
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={checkConnection}
+            disabled={testingConnection}
+            style={{ background: '#009ee3', borderColor: '#009ee3', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <RefreshCw size={14} className={testingConnection ? 'spin' : ''} />
+            {testingConnection ? 'Testando Conexão...' : 'Testar Conexão com MP'}
+          </button>
+        }
+      />
 
       {/* Grid de Cards de Status */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>

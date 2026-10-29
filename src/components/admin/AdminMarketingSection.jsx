@@ -3,8 +3,9 @@ import {
   Globe, Search, Share2, MessageCircle, BarChart3, ShoppingBag,
   CheckCircle2, AlertCircle, Clock, Copy, Check, ExternalLink,
   Plus, Trash2, Shield, Sparkles, RefreshCw, Eye, Tag, Flame,
-  Star, HelpCircle, Link as LinkIcon, Send, Video, ArrowRight
+  Star, HelpCircle, Link as LinkIcon, Send, Video, ArrowRight, Save
 } from 'lucide-react'
+import AdminSectionHeader from './AdminSectionHeader'
 import {
   DEFAULT_MARKETING_SETTINGS,
   fetchMarketingSettings,
@@ -224,40 +225,15 @@ export default function AdminMarketingSection({
 
   return (
     <div className="adm-marketing-section" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Top Banner White-Label */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(22, 163, 74, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%)',
-        border: '1px solid rgba(22, 163, 74, 0.25)',
-        borderRadius: 16,
-        padding: '20px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 16
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: 'var(--lime-glow)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--lime-dark)'
-          }}>
-            <Globe size={22} />
-          </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>SEO, Google Shopping & Divulgação</h3>
-            <span style={{ fontSize: '13px', color: 'var(--dark-600)' }}>
-              Domínio da loja: <strong style={{ color: 'var(--dark-900)' }}>{primaryDomain}</strong>
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
+      {/* Top Banner Padronizado */}
+      <AdminSectionHeader
+        icon={Globe}
+        iconColor="var(--lime-dark, #4d7c0f)"
+        iconBg="var(--lime-glow, rgba(132, 204, 22, 0.15))"
+        title="SEO, Google Shopping & Divulgação"
+        badge={<span className="badge badge-lime" style={{ fontSize: '11px', fontWeight: 700 }}>Google & Meta</span>}
+        description={`Domínio ativo da loja: ${primaryDomain} • Otimização para motores de busca, feed XML e tráfego orgânico.`}
+        actions={
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -268,8 +244,8 @@ export default function AdminMarketingSection({
             {isSaving ? <RefreshCw size={14} className="spin" /> : <Check size={14} />}
             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Navegação por Sub-Abas */}
       <div style={{ borderBottom: '1px solid var(--dark-200)', paddingBottom: 4 }}>

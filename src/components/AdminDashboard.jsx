@@ -24,6 +24,7 @@ import AdminCustomersSection from './admin/AdminCustomersSection'
 import AdminPaymentsSection from './admin/AdminPaymentsSection'
 import AdminMarketingSection from './admin/AdminMarketingSection'
 import AdminMercadoLivreSection from './admin/AdminMercadoLivreSection'
+import AdminSectionHeader from './admin/AdminSectionHeader'
 import { slugify } from '../services/seoManager'
 import {
   exportProductsToCsv,
@@ -1681,6 +1682,14 @@ export default function AdminDashboard() {
           {/* Overview */}
           {tab === 'overview' && (
             <div className="adm-overview">
+              <AdminSectionHeader
+                icon={BarChart3}
+                iconColor="#0284c7"
+                iconBg="#e0f2fe"
+                title="Visão Geral do E-commerce"
+                badge={<span className="badge badge-lime" style={{ fontSize: '11px', fontWeight: 700 }}>Tempo Real</span>}
+                description="Métricas consolidadas de receita, volume de pedidos, catálogo ativo e monitoramento fiscal da loja."
+              />
               <div className="adm-stat-grid">
                 <div className="adm-stat" style={{ '--accent': 'var(--lime)' }}>
                   <DollarSign size={24} />
@@ -1805,6 +1814,35 @@ export default function AdminDashboard() {
           {/* Products Management (Catálogo & Cadastro Inteligente) */}
           {(tab === 'products' || tab === 'add') && (
             <div className="adm-products">
+              <AdminSectionHeader
+                icon={Package}
+                iconColor="#7c3aed"
+                iconBg="#f3e8ff"
+                title="Catálogo & Gestão de Produtos"
+                badge={<span className="badge badge-cyan" style={{ fontSize: '11px', fontWeight: 700 }}>{products.length} itens</span>}
+                description="Gerenciamento completo de estoque, precificação comercial com margem, ficha técnica e publicação."
+                actions={
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${productViewMode === 'list' ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => setProductViewMode('list')}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Package size={15} /> Ver Lista
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${productViewMode === 'add' ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => setProductViewMode('add')}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Plus size={15} /> Cadastrar Produto
+                    </button>
+                  </div>
+                }
+              />
+
               {/* Header inteligente de alternância interna */}
               <div style={{
                 display: 'flex',
@@ -2093,7 +2131,16 @@ export default function AdminDashboard() {
 
           {/* Orders */}
           {tab === 'orders' && (
-            <div>
+            <div style={{ width: '100%' }}>
+              <AdminSectionHeader
+                icon={ShoppingCart}
+                iconColor="#d97706"
+                iconBg="#fef3c7"
+                title="Gestão de Pedidos & Vendas"
+                badge={<span className="badge badge-amber" style={{ fontSize: '11px', fontWeight: 700 }}>{orders.length} pedidos</span>}
+                description="Acompanhe o fluxo de compras dos clientes, status de pagamento, faturamento e logística de despacho."
+              />
+
               {/* Barra de Filtros Rápidos por Status e Busca */}
               <div style={{
                 display: 'flex',
@@ -2459,17 +2506,18 @@ export default function AdminDashboard() {
 
           {/* Shipping & Delivery Tab (Correios Multiempresa) */}
           {tab === 'shipping' && (
-            <div className="adm-shipping-tab">
-              <div className="adm-sec-card" style={{ maxWidth: '900px', margin: '0 auto' }}>
-                <div className="adm-sec-header">
-                  <Truck size={26} className="adm-sec-icon" style={{ color: '#0284c7', background: '#e0f2fe' }} />
-                  <div>
-                    <h3>Configurações de Frete & Entregas — Correios</h3>
-                    <p>Gerencie o contrato comercial dos Correios, credenciais de API e modalidades ativas para sua loja.</p>
-                  </div>
-                </div>
+            <div className="adm-shipping-tab" style={{ width: '100%' }}>
+              <AdminSectionHeader
+                icon={Truck}
+                iconColor="#0284c7"
+                iconBg="#e0f2fe"
+                title="Configurações de Frete & Entregas — Correios"
+                badge={<span className="badge badge-blue" style={{ fontSize: '11px', fontWeight: 700 }}>API CWS Oficial</span>}
+                description="Gerencie o contrato comercial dos Correios, credenciais de API e modalidades de envio ativas (SEDEX e PAC)."
+              />
 
-                <form onSubmit={handleSaveCorreios} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+              <div className="adm-sec-card" style={{ width: '100%', boxSizing: 'border-box' }}>
+                <form onSubmit={handleSaveCorreios} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                   {/* Status Geral */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: 'var(--dark-50)', borderRadius: '10px', border: '1px solid var(--dark-200)' }}>
                     <div>
@@ -2686,38 +2734,34 @@ export default function AdminDashboard() {
 
           {/* Company Data Tab */}
           {tab === 'company' && (
-            <div className="adm-editor-form">
-              <div className="adm-editor-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'var(--lime-glow)', color: 'var(--lime-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Building2 size={20} />
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Dados da Empresa & Identidade Visual</h3>
-                    <p style={{ margin: '2px 0 0 0', fontSize: 'var(--text-xs)', color: 'var(--dark-500)' }}>
-                      Personalize os dados cadastrais, fiscais e a marca do seu e-commerce. As alterações são sincronizadas automaticamente em toda a loja pública.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setShowSetupWizard(true)}
-                  style={{
-                    borderColor: 'var(--lime)',
-                    color: 'var(--lime-dark)',
-                    background: 'var(--lime-glow)',
-                    fontWeight: 700,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                  title="Abrir Assistente de Configuração Rápida em 3 Passos (White-Label)"
-                >
-                  <Sparkles size={15} /> Assistente Setup Wizard
-                </button>
-              </div>
+            <div className="adm-editor-form" style={{ width: '100%' }}>
+              <AdminSectionHeader
+                icon={Building2}
+                iconColor="#0284c7"
+                iconBg="#e0f2fe"
+                title="Dados da Empresa & Identidade Visual"
+                badge={<span className="badge badge-blue" style={{ fontSize: '11px', fontWeight: 700 }}>Multiloja Oficial</span>}
+                description="Personalize os dados cadastrais, fiscais e a marca do seu e-commerce. As alterações são sincronizadas automaticamente em toda a loja pública."
+                actions={
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setShowSetupWizard(true)}
+                    style={{
+                      borderColor: 'var(--lime)',
+                      color: 'var(--lime-dark)',
+                      background: 'var(--lime-glow)',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                    title="Abrir Assistente de Configuração Rápida em 3 Passos (White-Label)"
+                  >
+                    <Sparkles size={15} /> Assistente Setup Wizard
+                  </button>
+                }
+              />
 
               <form onSubmit={handleSaveCompany} className="adm-editor-grid">
                 {/* Linha Superior: Fiscal & Jurídica (Esquerda) + Contatos (Direita) */}
@@ -3225,8 +3269,17 @@ export default function AdminDashboard() {
 
           {/* Security & Password Tab */}
           {tab === 'security' && (
-            <div className="adm-security-tab">
-              <div className="adm-sec-card">
+            <div className="adm-security-tab" style={{ width: '100%' }}>
+              <AdminSectionHeader
+                icon={KeyRound}
+                iconColor="#16a34a"
+                iconBg="rgba(22, 163, 74, 0.12)"
+                title="Segurança & Credenciais de Acesso"
+                badge={<span className="badge badge-dark" style={{ fontSize: '11px', fontWeight: 700 }}>Acesso Restrito</span>}
+                description="Gerenciamento de credenciais administrativas, integridade de sessões e auditoria do painel."
+              />
+
+              <div className="adm-sec-card" style={{ width: '100%', boxSizing: 'border-box' }}>
                 <div className="adm-sec-header">
                   <KeyRound size={24} className="adm-sec-icon" />
                   <div>
@@ -3235,7 +3288,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                <form className="adm-sec-form" onSubmit={handlePasswordChangeSubmit}>
+                <form className="adm-sec-form" onSubmit={handlePasswordChangeSubmit} style={{ maxWidth: '600px' }}>
                   <div className="ck-field">
                     <label>Senha Atual</label>
                     <input

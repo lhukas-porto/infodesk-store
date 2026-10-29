@@ -19,6 +19,7 @@ import {
   generatePasswordResetLink
 } from '../../services/customerService'
 import { formatCep, formatPhone as formatDisplayPhone } from '../../services/companyService'
+import AdminSectionHeader from './AdminSectionHeader'
 
 export default function AdminCustomersSection() {
   const {
@@ -330,6 +331,30 @@ export default function AdminCustomersSection() {
 
   return (
     <div className="adm-customers-section">
+      {/* Cabeçalho Padronizado da Seção */}
+      <AdminSectionHeader
+        icon={Users}
+        iconColor="#0891b2"
+        iconBg="#cffafe"
+        title="Gestão de Clientes & LGPD"
+        badge={<span className="badge badge-cyan" style={{ fontSize: '11px', fontWeight: 700 }}>{stats.totalCustomers} cadastrados</span>}
+        description="Base cadastral de clientes, histórico de consumo, controle de consentimento LGPD e auditoria de dados."
+        actions={
+          canExport && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={handleExportCsv}
+              title="Exportar clientes em formato CSV para Excel"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: 'var(--lime)', color: 'var(--lime-dark)' }}
+            >
+              <Download size={15} />
+              <span>Exportar CSV</span>
+            </button>
+          )
+        }
+      />
+
       {/* 4 Cards de Estatísticas no Topo */}
       <div className="adm-stat-grid" style={{ marginBottom: 'var(--space-6)' }}>
         <div className="adm-stat" style={{ '--accent': 'var(--cyan, #06b6d4)' }}>
