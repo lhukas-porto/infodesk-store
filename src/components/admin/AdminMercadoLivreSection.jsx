@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   Store, CheckCircle2, AlertTriangle, RefreshCw, ExternalLink,
-  ArrowUpRight, ShoppingBag, Send, Percent, Tag, Search, Loader2
+  Search, Loader2, Send, Percent, Tag, ArrowUpRight, Check
 } from 'lucide-react'
 import { useStore } from '../../context/StoreContext'
 import { mercadoLivreService } from '../../services/mercadoLivreService'
@@ -11,7 +11,7 @@ export default function AdminMercadoLivreSection() {
   const [status, setStatus] = useState({ loading: true, connected: false })
   const [publishingId, setPublishingId] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [defaultMarkup, setDefaultMarkup] = useState(15) // 15% para cobrir taxas padrão do Meli
+  const [defaultMarkup, setDefaultMarkup] = useState(15) // 15% para cobrir taxas do Meli
   const [listingType, setListingType] = useState('gold_special') // gold_special (Clássico) ou gold_pro (Premium)
 
   // Consulta status de conexão da conta
@@ -24,7 +24,7 @@ export default function AdminMercadoLivreSection() {
   useEffect(() => {
     loadStatus()
 
-    // Verifica se veio de retorno de OAuth na URL
+    // Verifica retorno de OAuth na URL
     const urlParams = new URLSearchParams(window.location.search)
     if (urlParams.get('meli') === 'success') {
       showToast('🎉 Conta do Mercado Livre conectada com sucesso!')
@@ -44,7 +44,6 @@ export default function AdminMercadoLivreSection() {
 
       if (res.success) {
         showToast(`✅ Anúncio ${res.itemId} criado com sucesso no Mercado Livre! 🚀`)
-        // Atualiza o estado local do produto
         if (updateProduct) {
           updateProduct({
             ...product,
@@ -74,12 +73,12 @@ export default function AdminMercadoLivreSection() {
   })
 
   return (
-    <div className="adm-mercadolivre-section" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="adm-mercadolivre-section" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
       {/* Top Banner Mercado Livre */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(255, 230, 0, 0.12), rgba(45, 50, 119, 0.05))',
-        border: '1px solid rgba(255, 230, 0, 0.4)',
+        background: 'linear-gradient(135deg, rgba(255, 230, 0, 0.18), rgba(45, 50, 119, 0.04))',
+        border: '1px solid rgba(234, 179, 8, 0.35)',
         borderRadius: 16,
         padding: '24px 28px',
         display: 'flex',
@@ -98,74 +97,99 @@ export default function AdminMercadoLivreSection() {
             alignItems: 'center',
             justifyContent: 'center',
             color: '#2D3277',
-            boxShadow: '0 4px 12px rgba(255, 230, 0, 0.3)'
+            boxShadow: '0 4px 12px rgba(234, 179, 8, 0.25)',
+            flexShrink: 0
           }}>
             <Store size={28} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text, #fff)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: 4 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--dark-900, #0f172a)', fontWeight: 800 }}>
                 Integração Oficial com Mercado Livre
-              </h2>
+              </h3>
               {status.connected ? (
                 <span style={{
                   background: 'rgba(34, 197, 94, 0.15)',
-                  color: '#22c55e',
+                  color: '#15803d',
+                  border: '1px solid rgba(34, 197, 94, 0.3)',
                   fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '4px 10px',
+                  fontWeight: 700,
+                  padding: '3px 10px',
                   borderRadius: 20,
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4
                 }}>
-                  <CheckCircle2 size={12} /> Conectado ({status.nickname})
+                  <CheckCircle2 size={13} /> Conectado ({status.nickname || 'LHUCAS'})
                 </span>
               ) : (
                 <span style={{
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  color: '#ef4444',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#b91c1c',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
                   fontSize: '0.75rem',
-                  fontWeight: 600,
-                  padding: '4px 10px',
+                  fontWeight: 700,
+                  padding: '3px 10px',
                   borderRadius: 20,
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
                   gap: 4
                 }}>
-                  <AlertTriangle size={12} /> Desconectado
+                  <AlertTriangle size={13} /> Desconectado
                 </span>
               )}
             </div>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
-              Publique produtos diretamente da sua loja para o Mercado Livre com 1 clique.
+            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--dark-600, #475569)' }}>
+              Publique produtos diretamente do seu estoque para o Mercado Livre com sincronização em 1 clique.
             </p>
           </div>
         </div>
 
-        {/* Botão de Conexão OAuth */}
+        {/* Botão de Conexão */}
         <div>
           {status.loading ? (
-            <button className="adm-btn adm-btn-secondary" disabled>
-              <RefreshCw size={16} className="spin" /> Verificando...
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: '0.875rem' }}
+            >
+              <RefreshCw size={15} className="spin" /> Verificando...
             </button>
           ) : status.connected ? (
             <button
-              className="adm-btn adm-btn-secondary"
+              type="button"
+              className="btn btn-secondary"
               onClick={mercadoLivreService.connectAccount}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: '0.875rem',
+                background: 'var(--white, #fff)',
+                border: '1px solid var(--dark-200, #e2e8f0)',
+                color: 'var(--dark-800, #1e293b)'
+              }}
               title="Clique para renovar as credenciais ou trocar de conta"
             >
-              <RefreshCw size={16} /> Reconectar Conta
+              <RefreshCw size={15} /> Reconectar Conta
             </button>
           ) : (
             <button
-              className="adm-btn"
+              type="button"
+              className="btn"
               style={{
                 background: '#FFE600',
                 color: '#2D3277',
-                fontWeight: 700,
-                border: 'none',
-                boxShadow: '0 4px 12px rgba(255, 230, 0, 0.3)'
+                fontWeight: 800,
+                border: '1px solid #eab308',
+                boxShadow: '0 4px 12px rgba(234, 179, 8, 0.25)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: '0.875rem',
+                padding: '10px 18px',
+                borderRadius: 10
               }}
               onClick={mercadoLivreService.connectAccount}
             >
@@ -175,109 +199,149 @@ export default function AdminMercadoLivreSection() {
         </div>
       </div>
 
-      {/* Alerta de Configuração se não conectado */}
+      {/* Alerta caso desconectado */}
       {!status.connected && !status.loading && (
         <div style={{
           background: 'rgba(245, 158, 11, 0.08)',
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          borderRadius: 12,
+          border: '1px solid rgba(245, 158, 11, 0.25)',
+          borderRadius: 14,
           padding: '16px 20px',
           display: 'flex',
           alignItems: 'center',
           gap: 12
         }}>
-          <AlertTriangle size={24} style={{ color: '#f59e0b', flexShrink: 0 }} />
-          <div style={{ fontSize: '0.9rem', color: 'var(--text, #fff)' }}>
-            <strong>Passo necessário:</strong> Clique no botão <strong>"Conectar com Mercado Livre"</strong> acima para autorizar o Infodesk Store a publicar anúncios na sua conta de vendedor.
+          <AlertTriangle size={22} style={{ color: '#d97706', flexShrink: 0 }} />
+          <div style={{ fontSize: '0.875rem', color: 'var(--dark-800, #1e293b)' }}>
+            <strong>Ação necessária:</strong> Clique em <strong>"Conectar com Mercado Livre"</strong> acima para autorizar o Infodesk Store a gerenciar seus anúncios.
           </div>
         </div>
       )}
 
-      {/* Barra de Ajustes de Publicação */}
+      {/* Barra de Filtros e Parâmetros */}
       <div style={{
-        background: 'var(--surface-card, #1e293b)',
-        border: '1px solid var(--border, #334155)',
-        borderRadius: 16,
-        padding: '20px 24px',
+        background: 'var(--white, #ffffff)',
+        border: '1px solid var(--dark-200, #e2e8f0)',
+        borderRadius: 14,
+        padding: '16px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '16px'
+        gap: '16px',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
       }}>
-        {/* Busca */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-          <Search size={18} style={{ color: 'var(--text-muted, #94a3b8)' }} />
+        {/* Campo de Busca */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flex: 1,
+          minWidth: 260,
+          background: 'var(--surface-primary, #f8fafc)',
+          border: '1px solid var(--dark-200, #cbd5e1)',
+          borderRadius: 10,
+          padding: '8px 14px'
+        }}>
+          <Search size={18} style={{ color: 'var(--dark-500, #64748b)' }} />
           <input
             type="text"
-            className="adm-input"
-            placeholder="Buscar produto para anunciar..."
+            placeholder="Buscar produto por nome, código ou EAN..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            style={{ width: '100%', margin: 0 }}
+            style={{
+              width: '100%',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: '0.875rem',
+              color: 'var(--dark-900, #0f172a)'
+            }}
           />
         </div>
 
-        {/* Ajustes de Markup e Tipo */}
+        {/* Controles de Markup e Tipo de Anúncio */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--dark-700, #334155)' }}>
               Acréscimo no Meli:
             </span>
             <div style={{ position: 'relative', width: 90 }}>
               <input
                 type="number"
-                className="adm-input"
                 min="0"
                 max="100"
                 value={defaultMarkup}
                 onChange={e => setDefaultMarkup(Number(e.target.value) || 0)}
-                style={{ width: '100%', margin: 0, paddingRight: 28 }}
+                style={{
+                  width: '100%',
+                  padding: '8px 28px 8px 12px',
+                  border: '1px solid var(--dark-200, #cbd5e1)',
+                  borderRadius: 8,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--dark-900, #0f172a)',
+                  background: 'var(--white, #fff)',
+                  outline: 'none'
+                }}
               />
-              <Percent size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <Percent size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
             </div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted, #94a3b8)' }}>Tipo:</span>
+            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--dark-700, #334155)' }}>
+              Tipo de Anúncio:
+            </span>
             <select
-              className="adm-input"
               value={listingType}
               onChange={e => setListingType(e.target.value)}
-              style={{ width: 'auto', margin: 0 }}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid var(--dark-200, #cbd5e1)',
+                borderRadius: 8,
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                color: 'var(--dark-900, #0f172a)',
+                background: 'var(--white, #fff)',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
             >
-              <option value="gold_special">Clássico (menor taxa)</option>
-              <option value="gold_pro">Premium (sem juros)</option>
+              <option value="gold_special">Clássico (Menor taxa)</option>
+              <option value="gold_pro">Premium (Sem juros no cartão)</option>
             </select>
           </div>
+
         </div>
       </div>
 
       {/* Lista de Produtos */}
       <div style={{
-        background: 'var(--surface-card, #1e293b)',
-        border: '1px solid var(--border, #334155)',
+        background: 'var(--white, #ffffff)',
+        border: '1px solid var(--dark-200, #e2e8f0)',
         borderRadius: 16,
         padding: '24px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px'
+        gap: '16px',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>
-            Catálogo de Produtos ({filteredProducts.length})
-          </h3>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #94a3b8)' }}>
-            Dica: Fotos com fundo limpo e códigos de barras (EAN) garantem mais destaque no Mercado Livre.
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--dark-900, #0f172a)' }}>
+            Produtos Disponíveis para Anúncio ({filteredProducts.length})
+          </h4>
+          <span style={{ fontSize: '0.8rem', color: 'var(--dark-500, #64748b)' }}>
+            💡 Produtos sem código de barras são declarados automaticamente com justificativa aceita pelo Mercado Livre.
           </span>
         </div>
 
         {filteredProducts.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted, #94a3b8)' }}>
-            Nenhum produto encontrado.
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--dark-500, #64748b)' }}>
+            Nenhum produto encontrado com o termo pesquisado.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filteredProducts.map(prod => {
               const isPublished = Boolean(prod.mercadolivre_id)
               const isPublishing = publishingId === prod.id
@@ -293,13 +357,14 @@ export default function AdminMercadoLivreSection() {
                     justifyContent: 'space-between',
                     padding: '14px 18px',
                     borderRadius: 12,
-                    border: '1px solid var(--border, #334155)',
-                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid var(--dark-200, #e2e8f0)',
+                    background: isPublished ? 'rgba(34, 197, 94, 0.03)' : 'var(--white, #fff)',
                     gap: '16px',
-                    flexWrap: 'wrap'
+                    flexWrap: 'wrap',
+                    transition: 'border-color 0.2s ease'
                   }}
                 >
-                  {/* Foto + Nome */}
+                  {/* Foto + Informações */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: 260 }}>
                     <img
                       src={thumb}
@@ -307,68 +372,88 @@ export default function AdminMercadoLivreSection() {
                       style={{
                         width: 48,
                         height: 48,
-                        borderRadius: 8,
+                        borderRadius: 10,
                         objectFit: 'cover',
-                        background: '#0f172a'
+                        background: 'var(--dark-100, #f1f5f9)',
+                        border: '1px solid var(--dark-200, #e2e8f0)'
                       }}
                     />
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text, #fff)' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dark-900, #0f172a)' }}>
                         {prod.name}
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted, #94a3b8)', display: 'flex', gap: 12 }}>
-                        <span>Estoque: <strong>{prod.stock || 0} un.</strong></span>
-                        {prod.barcode && <span>EAN: {prod.barcode}</span>}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--dark-500, #64748b)', display: 'flex', gap: 12, marginTop: 2 }}>
+                        <span>Estoque: <strong style={{ color: 'var(--dark-800, #1e293b)' }}>{prod.stock || 0} un.</strong></span>
+                        {prod.barcode ? (
+                          <span>EAN: {prod.barcode}</span>
+                        ) : (
+                          <span style={{ color: '#d97706', fontWeight: 600 }}>Sem EAN (declaração auto)</span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Preços */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  {/* Preços Comparados */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #94a3b8)' }}>Na Loja</div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--dark-500, #64748b)' }}>Preço Loja</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dark-800, #1e293b)' }}>
                         R$ {Number(prod.price || 0).toFixed(2)}
                       </div>
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#FFE600', fontWeight: 600 }}>No Mercado Livre</div>
-                      <div style={{ fontWeight: 700, fontSize: '1rem', color: '#FFE600' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 700 }}>No Mercado Livre</div>
+                      <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#b45309' }}>
                         R$ {meliPrice}
                       </div>
                     </div>
                   </div>
 
-                  {/* Ações */}
+                  {/* Botões de Ação */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {isPublished ? (
                       <a
-                        href={prod.mercadolivre_permalink || `https://produto.mercadolivre.com.br/${prod.mercadolivre_id}`}
+                        href={prod.mercadolivre_permalink || `http://produto.mercadolivre.com.br/${prod.mercadolivre_id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="adm-btn adm-btn-secondary"
-                        style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}
+                        className="btn"
+                        style={{
+                          background: 'rgba(34, 197, 94, 0.1)',
+                          color: '#15803d',
+                          border: '1px solid rgba(34, 197, 94, 0.3)',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          padding: '8px 14px',
+                          borderRadius: 8,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          textDecoration: 'none'
+                        }}
                       >
                         <ExternalLink size={14} /> Ver Anúncio ({prod.mercadolivre_id})
                       </a>
                     ) : (
                       <button
-                        className="adm-btn"
+                        type="button"
+                        className="btn"
                         style={{
-                          background: status.connected ? '#FFE600' : 'var(--surface-variant, #334155)',
-                          color: status.connected ? '#2D3277' : '#94a3b8',
-                          fontWeight: 700,
+                          background: status.connected ? '#FFE600' : 'var(--dark-100, #f1f5f9)',
+                          color: status.connected ? '#2D3277' : 'var(--dark-400, #94a3b8)',
+                          fontWeight: 800,
                           fontSize: '0.85rem',
-                          border: 'none',
+                          border: status.connected ? '1px solid #eab308' : '1px solid var(--dark-200, #e2e8f0)',
+                          borderRadius: 8,
+                          padding: '8px 16px',
                           cursor: status.connected ? 'pointer' : 'not-allowed',
-                          display: 'flex',
+                          display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 6
+                          gap: 6,
+                          boxShadow: status.connected ? '0 2px 6px rgba(234, 179, 8, 0.2)' : 'none'
                         }}
                         disabled={!status.connected || isPublishing}
                         onClick={() => handlePublish(prod)}
-                        title={status.connected ? 'Criar anúncio no Mercado Livre' : 'Conecte a conta do Mercado Livre primeiro'}
                       >
                         {isPublishing ? (
                           <>
@@ -393,4 +478,3 @@ export default function AdminMercadoLivreSection() {
     </div>
   )
 }
-
