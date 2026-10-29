@@ -512,12 +512,9 @@ export function StoreProvider({ children }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': adminSession?.token ? `Bearer ${adminSession.token}` : 'admin'
+          'Authorization': adminSession?.token ? `Bearer ${adminSession.token}` : ''
         },
-        body: JSON.stringify({
-          ...newData,
-          isAdmin: true
-        })
+        body: JSON.stringify(newData)
       })
       const data = await res.json()
       if (data.success && data.data) {
@@ -826,7 +823,7 @@ export function StoreProvider({ children }) {
   }, [customerSession])
 
 
-  // === Admin Authentication (Autenticação Segura via API com Fallback Local) ===
+  // === Admin Authentication (Autenticação Segura via API com Validação Criptográfica) ===
   const loginAdmin = useCallback(async (email, password, remember = true) => {
     try {
       const resp = await fetch('/api/admin/auth', {
@@ -835,12 +832,11 @@ export function StoreProvider({ children }) {
         body: JSON.stringify({
           email,
           password,
-          remember,
-          localConfigPassword: adminConfig.password
+          remember
         })
       })
       const data = await resp.json()
-      if (data.success && data.token) {
+      if (resp.ok && data.success && data.token) {
         const session = {
           user: data.user,
           token: data.token,
@@ -856,41 +852,13 @@ export function StoreProvider({ children }) {
       }
       return { success: false, error: data.error || 'Credenciais inválidas.' }
     } catch (err) {
-      console.warn('[Admin Auth] Rota /api/admin/auth indisponível, usando validação de fallback:', err)
-      const cleanEmail = (email || '').trim().toLowerCase()
-      const validEmail = cleanEmail === 'admin' || cleanEmail === 'lucas' || cleanEmail.includes('infodesk') || cleanEmail.includes('lucas') || cleanEmail === (adminConfig.email || '').toLowerCase()
-      const validPassword = password === adminConfig.password || password === '308770' || password === 'infodesk@admin2026' || password === 'infodesk2026'
-
-      if (validEmail && validPassword) {
-        const expiresAt = remember
-          ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-          : new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
-
-        const session = {
-          user: {
-            name: adminConfig.name || 'Administrador',
-            email: adminConfig.email || 'admin@minhaloja.com.br',
-            role: adminConfig.role || 'Super Admin',
-          },
-          token: 'local_' + Math.random().toString(36).substring(2),
-          loginTime: new Date().toISOString(),
-          expiresAt,
-        }
-
-        setAdminSession(session)
-        localStorage.setItem('infodesk_admin_session', JSON.stringify(session))
-        setShowAdminLogin(false)
-        setShowAdminDashboard(true)
-        showToast(`Bem-vindo, ${(adminConfig.name || 'Administrador').split(' ')[0]}! Acesso seguro liberado. 🛡️`)
-        return { success: true }
-      }
-
+      console.error('[Admin Auth] Falha ao comunicar com o servidor de autenticação:', err)
       return {
         success: false,
-        error: !validEmail ? 'E-mail ou usuário não encontrado.' : 'Senha incorreta.',
+        error: 'Não foi possível conectar ao servidor de autenticação. Verifique sua conexão e tente novamente.'
       }
     }
-  }, [adminConfig, showToast])
+  }, [showToast])
 
   const logoutAdmin = useCallback(() => {
     setAdminSession(null)
@@ -904,32 +872,19 @@ export function StoreProvider({ children }) {
   }, [setShowAdminDashboard, showToast])
 
   const changeAdminPassword = useCallback((currentPassword, newPassword) => {
-    const isCurrentValid = currentPassword === adminConfig.password ||
-                           currentPassword === 'infodesk@admin2026' ||
-                           currentPassword === 'infodesk2026'
-
-    if (!isCurrentValid) {
-      return { success: false, error: 'A senha atual está incorreta.' }
+    if (!currentPassword) {
+      return { success: false, error: 'A senha atual deve ser informada.' }
     }
-    if (newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 6) {
       return { success: false, error: 'A nova senha deve ter no mínimo 6 caracteres.' }
     }
 
-    const updated = {
-      ...adminConfig,
-      password: newPassword,
-      lastPasswordChange: new Date().toISOString(),
+    showToast('A senha do administrador é gerenciada de forma centralizada nas variáveis de ambiente do servidor (ADMIN_PASSWORD). 🔐')
+    return {
+      success: true,
+      message: 'Para aplicar nova senha em produção, atualize a variável ADMIN_PASSWORD no servidor.'
     }
-
-    setAdminConfig(updated)
-    try {
-      localStorage.setItem('infodesk_admin_config', JSON.stringify(updated))
-    } catch {}
-    saveStoreSettingToDb('admin_config', updated).catch(() => {})
-
-    showToast('Senha de administrador atualizada com sucesso! 🔐')
-    return { success: true }
-  }, [adminConfig, showToast])
+  }, [showToast])
 
   // === Global Tax Rate Management ===
   const updateGlobalTaxRate = useCallback((newTaxRate, applyToAll = true) => {
