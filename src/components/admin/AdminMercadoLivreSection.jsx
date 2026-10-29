@@ -10,6 +10,7 @@ export default function AdminMercadoLivreSection() {
   const { products = [], showToast, updateProduct } = useStore()
   const [status, setStatus] = useState({ loading: true, connected: false })
   const [publishingId, setPublishingId] = useState(null)
+  const [publishedMap, setPublishedMap] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
   const [defaultMarkup, setDefaultMarkup] = useState(15) // 15% para cobrir taxas do Meli
   const [listingType, setListingType] = useState('gold_special') // gold_special (Clássico) ou gold_pro (Premium)
@@ -44,9 +45,19 @@ export default function AdminMercadoLivreSection() {
 
       if (res.success) {
         showToast(`✅ Anúncio ${res.itemId} criado com sucesso no Mercado Livre! 🚀`)
-        if (updateProduct) {
-          updateProduct({
-            ...product,
+        
+        // Atualiza o mapa local imediato
+        setPublishedMap(prev => ({
+          ...prev,
+          [product.id]: {
+            id: res.itemId,
+            permalink: res.permalink
+          }
+        }))
+
+        // Atualiza no StoreContext
+        if (typeof updateProduct === 'function') {
+          updateProduct(product.id, {
             mercadolivre_id: res.itemId,
             mercadolivre_permalink: res.permalink,
             mercadolivre_status: 'active'
@@ -343,7 +354,8 @@ export default function AdminMercadoLivreSection() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filteredProducts.map(prod => {
-              const isPublished = Boolean(prod.mercadolivre_id)
+              const meliItem = publishedMap[prod.id] || (prod.mercadolivre_id ? { id: prod.mercadolivre_id, permalink: prod.mercadolivre_permalink } : null)
+              const isPublished = Boolean(meliItem?.id)
               const isPublishing = publishingId === prod.id
               const meliPrice = (Number(prod.price || 0) * (1 + (defaultMarkup / 100))).toFixed(2)
               const thumb = (prod.images && prod.images[0]) || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=200'
@@ -355,13 +367,14 @@ export default function AdminMercadoLivreSection() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '14px 18px',
-                    borderRadius: 12,
-                    border: '1px solid var(--dark-200, #e2e8f0)',
-                    background: isPublished ? 'rgba(34, 197, 94, 0.03)' : 'var(--white, #fff)',
+                    padding: '16px 20px',
+                    borderRadius: 14,
+                    border: isPublished ? '1px solid #86efac' : '1px solid var(--dark-200, #e2e8f0)',
+                    background: isPublished ? '#f0fdf4' : 'var(--white, #fff)',
                     gap: '16px',
                     flexWrap: 'wrap',
-                    transition: 'border-color 0.2s ease'
+                    transition: 'all 0.2s ease',
+                    boxShadow: isPublished ? '0 2px 8px rgba(34, 197, 94, 0.08)' : 'none'
                   }}
                 >
                   {/* Foto + Informações */}
@@ -370,8 +383,8 @@ export default function AdminMercadoLivreSection() {
                       src={thumb}
                       alt={prod.name}
                       style={{
-                        width: 48,
-                        height: 48,
+                        width: 52,
+                        height: 52,
                         borderRadius: 10,
                         objectFit: 'cover',
                         background: 'var(--dark-100, #f1f5f9)',
@@ -379,6 +392,23 @@ export default function AdminMercadoLivreSection() {
                       }}
                     />
                     <div>
+                      {isPublished && (
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          border: '1px solid #bbf7d0',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: '0.725rem',
+                          fontWeight: 700,
+                          marginBottom: 4
+                        }}>
+                          <CheckCircle2 size={12} /> Publicado no Mercado Livre ({meliItem.id})
+                        </div>
+                      )}
                       <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dark-900, #0f172a)' }}>
                         {prod.name}
                       </div>
@@ -387,7 +417,7 @@ export default function AdminMercadoLivreSection() {
                         {prod.barcode ? (
                           <span>EAN: {prod.barcode}</span>
                         ) : (
-                          <span style={{ color: '#d97706', fontWeight: 600 }}>Sem EAN (declaração auto)</span>
+                          <span style={{ color: '#d97706', fontWeight: 600 }}>EAN auto-gerado</span>
                         )}
                       </div>
                     </div>
@@ -403,8 +433,10 @@ export default function AdminMercadoLivreSection() {
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 700 }}>No Mercado Livre</div>
-                      <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#b45309' }}>
+                      <div style={{ fontSize: '0.75rem', color: isPublished ? '#15803d' : '#b45309', fontWeight: 700 }}>
+                        {isPublished ? 'Preço no Meli' : 'Preço Simulado Meli'}
+                      </div>
+                      <div style={{ fontWeight: 800, fontSize: '1.05rem', color: isPublished ? '#15803d' : '#b45309' }}>
                         R$ {meliPrice}
                       </div>
                     </div>
@@ -413,27 +445,50 @@ export default function AdminMercadoLivreSection() {
                   {/* Botões de Ação */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {isPublished ? (
-                      <a
-                        href={prod.mercadolivre_permalink || `http://produto.mercadolivre.com.br/${prod.mercadolivre_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn"
-                        style={{
-                          background: 'rgba(34, 197, 94, 0.1)',
-                          color: '#15803d',
-                          border: '1px solid rgba(34, 197, 94, 0.3)',
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          padding: '8px 14px',
-                          borderRadius: 8,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          textDecoration: 'none'
-                        }}
-                      >
-                        <ExternalLink size={14} /> Ver Anúncio ({prod.mercadolivre_id})
-                      </a>
+                      <>
+                        <a
+                          href={meliItem.permalink || `http://produto.mercadolivre.com.br/${meliItem.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn"
+                          style={{
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            border: '1px solid #15803d',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            textDecoration: 'none',
+                            boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)'
+                          }}
+                        >
+                          <ExternalLink size={14} /> Ver no Mercado Livre
+                        </a>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '8px 10px',
+                            fontSize: '0.8rem',
+                            background: 'var(--white, #fff)',
+                            border: '1px solid var(--dark-200, #cbd5e1)',
+                            color: 'var(--dark-700, #334155)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5
+                          }}
+                          disabled={isPublishing}
+                          onClick={() => handlePublish(prod)}
+                          title="Sincronizar novamente com o Mercado Livre"
+                        >
+                          <RefreshCw size={12} className={isPublishing ? 'spin' : ''} />
+                          {isPublishing ? 'Atualizando...' : 'Re-sincronizar'}
+                        </button>
+                      </>
                     ) : (
                       <button
                         type="button"

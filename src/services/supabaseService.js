@@ -57,6 +57,9 @@ export function mapDbProductToApp(dbProd) {
     merchant_include: dbProd.merchant_include !== false,
     merchant_status: dbProd.merchant_status || 'eligible',
     merchant_exclusion_reason: dbProd.merchant_exclusion_reason || '',
+    mercadolivre_id: dbProd.mercadolivre_id || '',
+    mercadolivre_permalink: dbProd.mercadolivre_permalink || '',
+    mercadolivre_status: dbProd.mercadolivre_status || 'unlinked',
     createdAt: dbProd.created_at,
     updatedAt: dbProd.updated_at
   }
@@ -119,7 +122,10 @@ export function mapAppProductToDb(appProd) {
     weekly_offer: Boolean(appProd.weekly_offer),
     merchant_include: appProd.merchant_include !== false,
     merchant_status: appProd.merchant_status || 'eligible',
-    merchant_exclusion_reason: appProd.merchant_exclusion_reason || ''
+    merchant_exclusion_reason: appProd.merchant_exclusion_reason || '',
+    mercadolivre_id: appProd.mercadolivre_id || null,
+    mercadolivre_permalink: appProd.mercadolivre_permalink || null,
+    mercadolivre_status: appProd.mercadolivre_status || 'unlinked'
   }
 }
 
