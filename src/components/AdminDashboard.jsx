@@ -1660,16 +1660,16 @@ export default function AdminDashboard() {
         {/* Tabs */}
         <div className="adm-tabs">
           {[
-            { id: 'overview', icon: <BarChart3 size={16} />, label: 'Visão Geral' },
-            { id: 'products', icon: <Package size={16} />, label: `Produtos (${products.length})` },
-            { id: 'orders', icon: <ShoppingCart size={16} />, label: `Pedidos (${orders.length})` },
-            { id: 'customers', icon: <Users size={16} />, label: `Clientes (${customers.length})` },
-            { id: 'marketing', icon: <Globe size={16} />, label: 'SEO e Divulgação' },
-            { id: 'company', icon: <Building2 size={16} />, label: 'Dados da Empresa' },
-            { id: 'shipping', icon: <Truck size={16} />, label: 'Entregas' },
-            { id: 'payments', icon: <CreditCard size={16} />, label: 'Pagamentos' },
-            { id: 'mercadolivre', icon: <Store size={16} />, label: 'Mercado Livre' },
-            { id: 'security', icon: <KeyRound size={16} />, label: 'Senhas' },
+            { id: 'overview', icon: <BarChart3 size={15} />, label: 'Visão Geral' },
+            { id: 'products', icon: <Package size={15} />, label: `Produtos (${products.length})` },
+            { id: 'orders', icon: <ShoppingCart size={15} />, label: `Pedidos (${orders.length})` },
+            { id: 'customers', icon: <Users size={15} />, label: `Clientes (${customers.length})` },
+            { id: 'marketing', icon: <Globe size={15} />, label: 'SEO' },
+            { id: 'company', icon: <Building2 size={15} />, label: 'Empresa' },
+            { id: 'shipping', icon: <Truck size={15} />, label: 'Entregas' },
+            { id: 'payments', icon: <CreditCard size={15} />, label: 'Pagamentos' },
+            { id: 'mercadolivre', icon: <Store size={15} />, label: 'Mercado Livre' },
+            { id: 'security', icon: <KeyRound size={15} />, label: 'Senhas' },
           ].map(t => (
             <button key={t.id} className={`adm-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
               {t.icon} {t.label}
@@ -4236,7 +4236,7 @@ export default function AdminDashboard() {
           .adm-user-email { color: var(--dark-400); }
           .adm-header-actions { display: flex; gap: var(--space-2); }
           .adm-tabs {
-            display: flex; gap: 4px; padding: 0 var(--space-6);
+            display: flex; gap: 2px; padding: 0 var(--space-3);
             border-bottom: 1px solid var(--dark-100); overflow-x: auto;
             scrollbar-width: none;
           }
@@ -4244,8 +4244,8 @@ export default function AdminDashboard() {
             display: none;
           }
           .adm-tab {
-            display: flex; align-items: center; gap: 6px;
-            padding: var(--space-3) 14px; font-size: var(--text-sm); font-weight: 500;
+            display: flex; align-items: center; gap: 5px;
+            padding: 10px 8px; font-size: 0.8125rem; font-weight: 500;
             color: var(--dark-500); border-bottom: 2px solid transparent;
             transition: all var(--transition-fast); cursor: pointer; background: none; border-top: none; border-left: none; border-right: none;
             white-space: nowrap; flex-shrink: 0;
