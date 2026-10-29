@@ -1658,19 +1658,19 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs em Ordem Alfabética */}
         <div className="adm-tabs">
           {[
-            { id: 'overview', icon: <BarChart3 size={15} />, label: 'Visão Geral' },
-            { id: 'products', icon: <Package size={15} />, label: `Produtos (${products.length})` },
-            { id: 'orders', icon: <ShoppingCart size={15} />, label: `Pedidos (${orders.length})` },
             { id: 'customers', icon: <Users size={15} />, label: `Clientes (${customers.length})` },
-            { id: 'marketing', icon: <Globe size={15} />, label: 'SEO' },
             { id: 'company', icon: <Building2 size={15} />, label: 'Empresa' },
             { id: 'shipping', icon: <Truck size={15} />, label: 'Entregas' },
-            { id: 'payments', icon: <CreditCard size={15} />, label: 'Pagamentos' },
             { id: 'mercadolivre', icon: <Store size={15} />, label: 'Mercado Livre' },
+            { id: 'payments', icon: <CreditCard size={15} />, label: 'Pagamentos' },
+            { id: 'orders', icon: <ShoppingCart size={15} />, label: `Pedidos (${orders.length})` },
+            { id: 'products', icon: <Package size={15} />, label: `Produtos (${products.length})` },
             { id: 'security', icon: <KeyRound size={15} />, label: 'Senhas' },
+            { id: 'marketing', icon: <Globe size={15} />, label: 'SEO' },
+            { id: 'overview', icon: <BarChart3 size={15} />, label: 'Visão Geral' },
           ].map(t => (
             <button key={t.id} className={`adm-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
               {t.icon} {t.label}
