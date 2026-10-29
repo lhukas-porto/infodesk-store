@@ -64,6 +64,21 @@ async function getHandler(path) {
   if (path.startsWith('/api/seo/tenant-lookup')) {
     return (await import('../lib/api/seo/tenant-lookup.js')).default
   }
+  if (path.startsWith('/api/mercadolivre/auth')) {
+    return (await import('../lib/api/mercadolivre/auth.js')).default
+  }
+  if (path.startsWith('/api/mercadolivre/callback')) {
+    return (await import('../lib/api/mercadolivre/callback.js')).default
+  }
+  if (path.startsWith('/api/mercadolivre/status')) {
+    return (await import('../lib/api/mercadolivre/status.js')).default
+  }
+  if (path.startsWith('/api/mercadolivre/publish')) {
+    return (await import('../lib/api/mercadolivre/publish.js')).default
+  }
+  if (path.startsWith('/api/mercadolivre/webhook')) {
+    return (await import('../lib/api/mercadolivre/webhook.js')).default
+  }
   if (path.startsWith('/api/google-merchant/feed') || path === '/api/google-merchant/feed.xml') {
     return (await import('../lib/api/google-merchant/feed.js')).default
   }

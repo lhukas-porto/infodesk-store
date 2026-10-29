@@ -5,7 +5,7 @@ import {
   Shield, KeyRound, User, Users, Lock, CheckCircle2, AlertCircle, Image as ImageIcon,
   Layers, Sliders, Eye, EyeOff, RefreshCw, Printer, Sparkles, Truck, Loader2,
   MessageCircle, Send, Building2, Upload, Globe, MapPin, Phone, Mail, Briefcase, CreditCard,
-  Check, Bell, Download, FileSpreadsheet, Star, Flame, ShoppingBag
+  Check, Bell, Download, FileSpreadsheet, Star, Flame, ShoppingBag, Store
 } from 'lucide-react'
 import { useStore } from '../context/StoreContext'
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient'
@@ -23,6 +23,7 @@ import BarcodeLabel from './BarcodeLabel'
 import AdminCustomersSection from './admin/AdminCustomersSection'
 import AdminPaymentsSection from './admin/AdminPaymentsSection'
 import AdminMarketingSection from './admin/AdminMarketingSection'
+import AdminMercadoLivreSection from './admin/AdminMercadoLivreSection'
 import { slugify } from '../services/seoManager'
 import {
   exportProductsToCsv,
@@ -1667,6 +1668,7 @@ export default function AdminDashboard() {
             { id: 'company', icon: <Building2 size={16} />, label: 'Dados da Empresa' },
             { id: 'shipping', icon: <Truck size={16} />, label: 'Entregas' },
             { id: 'payments', icon: <CreditCard size={16} />, label: 'Pagamentos' },
+            { id: 'mercadolivre', icon: <Store size={16} />, label: 'Mercado Livre' },
             { id: 'security', icon: <KeyRound size={16} />, label: 'Senhas' },
           ].map(t => (
             <button key={t.id} className={`adm-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
@@ -3214,6 +3216,11 @@ export default function AdminDashboard() {
           {/* Mercado Pago Payments Configuration & History */}
           {tab === 'payments' && (
             <AdminPaymentsSection />
+          )}
+
+          {/* Mercado Livre Products & Account Integration */}
+          {tab === 'mercadolivre' && (
+            <AdminMercadoLivreSection />
           )}
 
           {/* Security & Password Tab */}
